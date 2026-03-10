@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Ujjina Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://vjs.zencdn.net/8.23.6/video-js.css" rel="stylesheet">
+  <style>
+    html, body {
+      width: 100%; height: 100%; height: 100dvh;
+      margin: 0; padding: 0; overflow: hidden;
+      background-color: #000;
+    }
+    #player {
+      position: relative;
+      width: 100%; height: 100%;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    #player .video-js {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: transparent !important;
+    }
+    #player .video-js .vjs-tech { background-color: transparent !important; }
+    #player .video-js .vjs-poster { background-color: transparent !important; }
+    #player .video-js.vjs-has-started .vjs-tech { background-color: #000 !important; }
+    /* Boton circular responsive */
+    #player .video-js .vjs-big-play-button {
+      font-size: clamp(40px, 10vmin, 80px) !important;
+      width: 1.5em !important; height: 1.5em !important;
+      line-height: 1.5em !important; border-radius: 50% !important;
+      border: 0.06em solid rgba(255,255,255,0.25) !important;
+      padding: 0 !important;
+      margin-top: -0.75em !important; margin-left: -0.75em !important;
+      transition: background-color 0.3s ease, transform 0.2s ease !important;
+    }
+    #player .video-js .vjs-big-play-button:hover { transform: scale(1.1) !important; }
+    #player .video-js .vjs-big-play-button .vjs-icon-placeholder::before {
+      display: flex !important; align-items: center !important; justify-content: center !important;
+    }
+    /* Ocultar error */
+    #player .video-js .vjs-error-display { display: none !important; }
+    #player .video-js.vjs-error .vjs-big-play-button { display: block !important; }
+    /* Logo overlay */
+    .player-logo {
+      position: absolute; z-index: 30; pointer-events: none;
+    }
+    /* Ecualizador */
+    @keyframes eq { from { height: 100%; } to { height: 5px; } }
+    @keyframes eqIdle { from { height: 15px; } to { height: 5px; } }
+    .equalizer {
+      position: absolute; top: 50%; left: 0;
+      width: 100%; height: 120px;
+      transform: translateY(-50%);
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 0 2rem; box-sizing: border-box;
+      pointer-events: none; z-index: 10;
+      transition: opacity 0.5s ease;
+    }
+    .equalizer.active { opacity: 1; }
+    .equalizer.idle { opacity: 0.3; }
+    .equalizer .vertical {
+      flex: 1; margin: 0 2px; border-radius: 3px; height: 10px;
+    }
+    @media (max-width: 768px) and (orientation: portrait) { .equalizer { height: 70px; padding: 0 1rem; } }
+    @media (max-width: 768px) and (orientation: landscape) { .equalizer { height: 60px; padding: 0 1rem; } }
+    @media (min-width: 769px) and (max-width: 1024px) { .equalizer { height: 100px; } }
+    /* Loading */
+    #loading {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      color: #555; font-family: sans-serif; font-size: 14px;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Cargando reproductor...</div>
+  <div id="player" style="display:none;">
+    <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
+  </div>
+
+  <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyBcKe_gKfU64C7lvFH0DZ41JcwbOrR7GxA",
+      authDomain: "ujjina-player-studio.firebaseapp.com",
+      projectId: "ujjina-player-studio",
+      storageBucket: "ujjina-player-studio.firebasestorage.app",
+      messagingSenderId: "277481746248",
+      appId: "1:277481746248:web:3c4e73663cc3a281880d7d"
+    });
+    var db = firebase.firestore();
+
+    function hexToRgba(hex, a) {
+      if (!hex) return 'rgba(0,0,0,' + a + ')';
+      hex = hex.replace('#', '');
+      return 'rgba(' + parseInt(hex.substring(0,2),16) + ',' + parseInt(hex.substring(2,4),16) + ',' + parseInt(hex.substring(4,6),16) + ',' + a + ')';
+    }
+
+    async function resolveStreamUrl(stream) {
+      if (stream.method === 'direct') return stream.url || '';
+      if (!stream.jsonUrl || !stream.jsonPath) return '';
+      try {
+        var ctrl = new AbortController();
+        var tid = setTimeout(function() { ctrl.abort(); }, 5000);
+        var resp = await fetch(stream.jsonUrl, { signal: ctrl.signal, cache: 'no-cache' });
+        clearTimeout(tid);
+        var data = await resp.json();
+        var parts = stream.jsonPath.split('.');
+        var val = data;
+        for (var i = 0; i < parts.length; i++) {
+          if (val == null) return '';
+          val = val[parts[i]];
+        }
+        return val || '';
+      } catch (e) {
+        console.error('JSON fetch error:', e);
+        return '';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+      var params = new URLSearchParams(window.location.search);
+      var uid = params.get('uid');
+      var pid = params.get('pid');
+      var loadEl = document.getElementById('loading');
+
+      if (!uid || !pid) {
+        loadEl.textContent = 'Error: parametros uid/pid no proporcionados';
+        return;
+      }
+
+      // Cargar config de Firestore
+      var config;
+      try {
+        var doc = await db.collection('players').doc(uid).collection('list').doc(pid).get();
+        if (!doc.exists) {
+          loadEl.textContent = 'Reproductor no encontrado';
+          return;
+        }
+        config = doc.data();
+      } catch (e) {
+        loadEl.textContent = 'Error al cargar: ' + e.message;
+        return;
+      }
+
+      // Resolver stream URL
+      var streamUrl = await resolveStreamUrl(config.stream || {});
+
+      // Preparar contenedor
+      var playerDiv = document.getElementById('player');
+      var selector = '#player .video-js';
+
+      // Background image (radio)
+      if (config.type === 'radio' && config.background && config.background.image) {
+        playerDiv.style.backgroundImage = "url('" + config.background.image + "')";
+      }
+
+      // Mostrar player, ocultar loading
+      playerDiv.style.display = '';
+      loadEl.style.display = 'none';
+
+      // Titulo
+      document.title = (config.name || 'Ujjina Player') + ' - En Vivo';
+
+      // CSS dinamico
+      var css = '';
+      var c = config.colors || {};
+      var playRgba = hexToRgba(c.play, 0.85);
+      var playRgbaHover = hexToRgba(c.play, 1);
+      css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
+      css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
+      css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
+      css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
+      css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
+      css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
+
+      if (config.type === 'radio') {
+        css += selector + ' { background-color: transparent !important; }';
+        css += selector + ' .vjs-poster { background-color: transparent !important; }';
+      }
+
+      // Barra gruesa
+      var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
+      if (barSize === 'large') {
+        css += selector + ' .vjs-control-bar { height: clamp(40px, 8vh, 56px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: clamp(40px, 8vh, 56px) !important; padding: 0 0.3em !important; }';
+        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.5vw, 14px) !important; line-height: clamp(40px, 8vh, 56px) !important; display: flex !important; align-items: center !important; }';
+        css += selector + ' .vjs-control-bar .vjs-icon-placeholder::before { font-size: clamp(18px, 2.5vw, 26px) !important; line-height: clamp(40px, 8vh, 56px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; display: flex !important; align-items: center !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
+      }
+
+      var styleEl = document.createElement('style');
+      styleEl.textContent = css;
+      document.head.appendChild(styleEl);
+
+      // Poster (TV)
+      var posterUrl = (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
+
+      // Iniciar Video.js
+      var player = videojs('vjs-player', {
+        controls: config.behavior ? config.behavior.controls !== false : true,
+        autoplay: config.behavior ? !!config.behavior.autoplay : false,
+        liveui: config.behavior ? config.behavior.liveui !== false : true,
+        fluid: false,
+        poster: posterUrl,
+        sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
+      });
+
+      // Logo overlay
+      if (config.logo && config.logo.url) {
+        var logo = document.createElement('img');
+        logo.src = config.logo.url;
+        logo.className = 'player-logo';
+        logo.style.width = (config.logo.size || 60) + 'px';
+        logo.style.height = 'auto';
+        var pos = (config.logo.position || 'top-left').split('-');
+        logo.style[pos[0]] = '10px';
+        logo.style[pos[1]] = '10px';
+        logo.onerror = function() { this.style.display = 'none'; };
+        playerDiv.appendChild(logo);
+      }
+
+      // Ecualizador (Radio)
+      if (config.type === 'radio' && config.equalizer && config.equalizer.enabled !== false) {
+        var eq = document.createElement('div');
+        eq.className = 'equalizer idle';
+        var barColor = hexToRgba(
+          (config.equalizer.barColor || '#ffffff'),
+          (config.equalizer.opacity || 0.6)
+        );
+        var isMobile = window.innerWidth <= 768;
+        var barCount = isMobile ? 20 : 40;
+        for (var i = 0; i < barCount; i++) {
+          var bar = document.createElement('i');
+          bar.className = 'vertical';
+          var dur = (Math.random() * 0.9 + 0.3).toFixed(2);
+          bar.style.setProperty('--duration', dur + 's');
+          bar.style.backgroundColor = barColor;
+          bar.style.animation = 'eqIdle 2s ease infinite alternate-reverse';
+          eq.appendChild(bar);
+        }
+        playerDiv.appendChild(eq);
+
+        player.on('play', function() {
+          eq.classList.remove('idle');
+          eq.classList.add('active');
+          eq.querySelectorAll('.vertical').forEach(function(b) {
+            var d = b.style.getPropertyValue('--duration') || '0.8s';
+            b.style.animation = 'eq ' + d + ' ease infinite alternate-reverse';
+          });
+        });
+        player.on('pause', function() {
+          eq.classList.remove('active');
+          eq.classList.add('idle');
+          eq.querySelectorAll('.vertical').forEach(function(b) {
+            b.style.animation = 'eqIdle 2s ease infinite alternate-reverse';
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>
