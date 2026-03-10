@@ -486,13 +486,13 @@
         }
       }
 
-      // === Watermark ===
+      // === Watermark (inside vjs container so it follows fullscreen) ===
       if (config.watermark && config.watermark.enabled && config.watermark.text) {
         var wm = document.createElement('div');
         wm.className = 'watermark-overlay';
         wm.style.opacity = config.watermark.opacity || 0.15;
         wm.textContent = config.watermark.text;
-        playerDiv.appendChild(wm);
+        player.el().appendChild(wm);
       }
     });
   </script>
