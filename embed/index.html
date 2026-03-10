@@ -223,13 +223,12 @@
       if (barSize === 'large') {
         var bh = 'clamp(48px, 9vh, 70px)';
         css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; padding: 0 !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar > .vjs-control { display: flex !important; align-items: center !important; justify-content: center !important; height: 100% !important; }';
-        css += selector + ' .vjs-control-bar .vjs-button > .vjs-icon-placeholder::before { font-size: clamp(20px, 2.8vw, 28px) !important; line-height: 1 !important; }';
-        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 18px) !important; padding: 0 0.3em !important; }';
-        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.6vw, 15px) !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; display: flex !important; align-items: center !important; justify-content: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
+        css += selector + ' .vjs-control-bar .vjs-button > .vjs-icon-placeholder::before { font-size: clamp(20px, 2.8vw, 28px) !important; line-height: ' + bh + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 18px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
+        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.6vw, 15px) !important; line-height: ' + bh + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; }';
         css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
       }
 
