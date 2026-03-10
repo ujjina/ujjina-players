@@ -174,43 +174,30 @@
       var playRgba = hexToRgba(c.play, 0.85);
       var playRgbaHover = hexToRgba(c.play, 1);
 
+      // === BOTÓN PLAY CIRCULAR — TODOS los skins (mismo estilo que default) ===
+      css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; background-image: none !important; color: #fff !important; font-size: clamp(40px, 10vmin, 80px) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; top: 50% !important; left: 50% !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
+      css += selector + ' .vjs-big-play-button:hover, ' + selector + ':hover .vjs-big-play-button { background-color: ' + playRgbaHover + ' !important; background-image: none !important; transform: scale(1.1) !important; }';
+      css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
+
+      // Forest: el tema oculta el icono y usa SVG — restaurar icono
+      if (skin === 'forest') {
+        css += selector + ' .vjs-big-play-button .vjs-icon-placeholder { display: block !important; }';
+      }
+
       if (!isTheme) {
-        // === SKIN DEFAULT: personalización completa ===
-        css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; font-size: clamp(40px, 10vmin, 80px) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
-        css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; transform: scale(1.1) !important; }';
-        css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
+        // === SKIN DEFAULT: colores de barra ===
         css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
         css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
         css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
         css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
       } else {
-        // === TEMAS (city, fantasy, forest, sea) ===
+        // === TEMAS: colores de barra ===
         var themeVar = '--vjs-theme-' + skin;
         css += selector + ' { ' + themeVar + '--primary: ' + (c.progress || '#4a9eff') + '; ' + themeVar + '--secondary: ' + (c.icons || '#fff') + '; }';
         css += selector + ' .vjs-control-bar { background: ' + (c.controls || '#1a1a2e') + ' !important; }';
         css += selector + ' .vjs-play-progress { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
         css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
         css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + '; }';
-
-        // === BOTON: override especifico por tema ===
-        if (skin === 'city') {
-          css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
-          css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
-        } else if (skin === 'fantasy') {
-          css += selector + ' .vjs-big-play-button { color: ' + (c.play || '#9f44b4') + ' !important; }';
-          css += selector + ':hover .vjs-big-play-button { color: ' + (c.icons || '#fff') + ' !important; }';
-        } else if (skin === 'forest') {
-          var encColor = (c.play || '#fff').replace('#', '%23');
-          var forestPath = 'M44 88C19.738 88 0 68.262 0 44S19.738 0 44 0s44 19.738 44 44-19.738 44-44 44zm0-85C21.393 3 3 21.393 3 44c0 22.608 18.393 41 41 41s41-18.392 41-41C85 21.393 66.607 3 44 3zm16.063 43.898L39.629 60.741a3.496 3.496 0 01-3.604.194 3.492 3.492 0 01-1.859-3.092V30.158c0-1.299.712-2.483 1.859-3.092a3.487 3.487 0 013.604.194l20.433 13.843a3.497 3.497 0 01.001 5.795zm-1.683-3.311L37.946 29.744a.49.49 0 00-.276-.09.51.51 0 00-.239.062.483.483 0 00-.265.442v27.685c0 .262.166.389.265.442.1.053.299.118.515-.028L58.38 44.414A.489.489 0 0058.6 44a.49.49 0 00-.22-.413z';
-          var forestSvg = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='88' fill='" + encColor + "'%3E%3Cpath fill-rule='evenodd' d='" + forestPath + "'/%3E%3C/svg%3E";
-          css += selector + ' .vjs-big-play-button { background: url("' + forestSvg + '") no-repeat 50% !important; }';
-          var encHover = (c.progress || '#6fb04e').replace('#', '%23');
-          var forestSvgHover = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='88' fill='" + encHover + "'%3E%3Cpath fill-rule='evenodd' d='" + forestPath + "'/%3E%3C/svg%3E";
-          css += selector + ':hover .vjs-big-play-button, ' + selector + ' .vjs-big-play-button:focus { background: url("' + forestSvgHover + '") no-repeat 50% !important; }';
-        } else if (skin === 'sea') {
-          css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
-          css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
-        }
       }
 
       if (config.type === 'radio') {
@@ -218,27 +205,48 @@
         css += selector + ' .vjs-poster { background-color: transparent !important; }';
       }
 
-      // Barra gruesa — solo skin default (cada tema tiene layout propio)
+      // === BARRA GRUESA ===
       var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
-      if (!isTheme && barSize === 'large') {
-        var bh = 'clamp(40px, 8vh, 56px)';
-        css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
-        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
-        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.5vw, 14px) !important; line-height: ' + bh + ' !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-icon-placeholder::before { font-size: clamp(18px, 2.5vw, 26px) !important; line-height: ' + bh + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
+      if (barSize === 'large') {
+        if (!isTheme) {
+          // Default skin large bar
+          var bh = 'clamp(40px, 8vh, 56px)';
+          css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; }';
+          css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
+          css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
+          css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.5vw, 14px) !important; line-height: ' + bh + ' !important; display: flex !important; align-items: center !important; }';
+          css += selector + ' .vjs-control-bar .vjs-icon-placeholder::before { font-size: clamp(18px, 2.5vw, 26px) !important; line-height: ' + bh + ' !important; }';
+          css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; display: flex !important; align-items: center !important; }';
+          css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
+          css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
+          css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
+        } else if (skin === 'city') {
+          // City: 70px (20px padding-top) → 90px (20px padding, 70px contenido)
+          css += selector + ' .vjs-control-bar { height: 90px !important; }';
+          css += selector + ' .vjs-button > .vjs-icon-placeholder::before { line-height: 70px !important; font-size: 1.3em !important; }';
+          css += selector + ' .vjs-remaining-time { line-height: 70px !important; font-size: 1.1em !important; }';
+        } else if (skin === 'fantasy') {
+          // Fantasy: 54px → 70px
+          css += selector + ' .vjs-control-bar { height: 70px !important; }';
+          css += selector + ' .vjs-button > .vjs-icon-placeholder::before, ' + selector + ' .vjs-time-control { line-height: 70px !important; }';
+        } else if (skin === 'forest') {
+          // Forest: ~30px → 50px
+          css += selector + ' .vjs-control-bar { height: 50px !important; }';
+          css += selector + ' .vjs-button > .vjs-icon-placeholder::before { line-height: 50px !important; font-size: 1.1em !important; }';
+        } else if (skin === 'sea') {
+          // Sea: 4em → 5.5em
+          css += selector + ' .vjs-control-bar { height: 5.5em !important; }';
+          css += selector + ' .vjs-button > .vjs-icon-placeholder::before { line-height: 3.1 !important; }';
+          css += selector + ' .vjs-time-control { line-height: 5.5em !important; }';
+        }
       }
 
-      // Fix LIVE text alignment para temas city, sea, fantasy
+      // Fix LIVE text alignment para temas
       if (skin === 'city' || skin === 'sea' || skin === 'fantasy') {
         css += selector + ' .vjs-control-bar .vjs-live-display { align-self: center !important; line-height: normal !important; }';
       }
 
-      // Ocultar error — siempre
+      // Ocultar error
       css += selector + ' .vjs-error-display { display: none !important; }';
       css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
 
