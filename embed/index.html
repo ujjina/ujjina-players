@@ -215,6 +215,11 @@
         css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
       }
 
+      // Fix LIVE text alignment para temas city, sea, fantasy
+      if (skin === 'city' || skin === 'sea' || skin === 'fantasy') {
+        css += selector + ' .vjs-control-bar .vjs-live-display { display: flex !important; align-items: center !important; height: 100% !important; line-height: normal !important; }';
+      }
+
       // Ocultar error — siempre
       css += selector + ' .vjs-error-display { display: none !important; }';
       css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
