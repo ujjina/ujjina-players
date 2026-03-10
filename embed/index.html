@@ -524,12 +524,6 @@
         }
       })();
 
-      // === Hide PiP if disabled ===
-      if (config.behavior && config.behavior.pip === false) {
-        var pipToggle = player.getChild('controlBar') && player.getChild('controlBar').getChild('pictureInPictureToggle');
-        if (pipToggle) pipToggle.hide();
-      }
-
       // === AirPlay (Safari/WebKit only) ===
       if (config.behavior && config.behavior.airplay) {
         var vid = document.querySelector('video');
