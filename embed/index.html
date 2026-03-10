@@ -170,20 +170,18 @@
       var c = config.colors || {};
       var isTheme = skin !== 'default';
 
-      // Colores personalizados — aplican en TODOS los temas
-      var playRgba = hexToRgba(c.play, 0.85);
-      var playRgbaHover = hexToRgba(c.play, 1);
-      css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
-      css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
+      // Colores de barra, progreso, iconos y texto — aplican en TODOS los temas
       css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
       css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
       css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
       css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
 
-      // Boton circular responsive — solo skin default (exacto como ujjinatv.html)
+      // Boton grande — solo personalizar en skin default (los temas tienen su propio diseño)
       if (!isTheme) {
-        css += selector + ' .vjs-big-play-button { font-size: clamp(40px, 10vmin, 80px) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
-        css += selector + ' .vjs-big-play-button:hover { transform: scale(1.1) !important; }';
+        var playRgba = hexToRgba(c.play, 0.85);
+        var playRgbaHover = hexToRgba(c.play, 1);
+        css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; font-size: clamp(40px, 10vmin, 80px) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
+        css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; transform: scale(1.1) !important; }';
         css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
       }
 
