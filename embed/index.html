@@ -134,6 +134,40 @@
       font-size: clamp(12px, 2vmin, 18px); color: #fff;
       white-space: nowrap; animation: watermark-move 30s linear infinite;
     }
+    /* AirPlay / Chromecast */
+    .vjs-airplay-btn, .vjs-cast-btn {
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      height: 100%; padding: 0 0.5em;
+    }
+    .vjs-airplay-btn svg, .vjs-cast-btn svg { width: clamp(14px, 2vw, 18px); height: auto; fill: currentColor; }
+    /* Password gate */
+    #password-gate {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 60; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #000; gap: 12px;
+    }
+    #password-gate .gate-title {
+      color: #fff; font-family: Inter, sans-serif;
+      font-size: clamp(14px, 3vmin, 20px); font-weight: 600;
+    }
+    #password-gate input {
+      padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1); color: #fff; font-size: 14px;
+      font-family: Inter, sans-serif; outline: none; width: 220px; text-align: center;
+    }
+    #password-gate input:focus { border-color: #8b6fff; }
+    #password-gate button {
+      padding: 10px 28px; border-radius: 8px; border: none;
+      background: linear-gradient(135deg, #8b6fff, #5a3fd6); color: #fff;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: Inter, sans-serif;
+    }
+    #password-gate button:hover { opacity: 0.9; }
+    #password-gate .gate-error {
+      color: #ef4444; font-size: 12px; font-family: Inter, sans-serif;
+      min-height: 16px;
+    }
     /* Loading */
     #loading {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -145,6 +179,12 @@
 </head>
 <body>
   <div id="loading">Cargando reproductor...</div>
+  <div id="password-gate" style="display:none;">
+    <div class="gate-title">Contenido protegido</div>
+    <input type="password" id="gate-input" placeholder="Ingresa la contrase&ntilde;a" autocomplete="off">
+    <button id="gate-btn">Acceder</button>
+    <div class="gate-error" id="gate-error"></div>
+  </div>
   <div id="player" style="display:none;">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
     <div id="offline-overlay"><div class="offline-msg"></div></div>
@@ -217,6 +257,31 @@
       } catch (e) {
         loadEl.textContent = 'Error al cargar: ' + e.message;
         return;
+      }
+
+      // === Password gate ===
+      if (config.protection && config.protection.enabled && config.protection.password) {
+        loadEl.style.display = 'none';
+        var gateEl = document.getElementById('password-gate');
+        gateEl.style.display = '';
+        var unlocked = await new Promise(function(resolve) {
+          var gateBtn = document.getElementById('gate-btn');
+          var gateInput = document.getElementById('gate-input');
+          var gateError = document.getElementById('gate-error');
+          function tryUnlock() {
+            if (gateInput.value === config.protection.password) {
+              resolve(true);
+            } else {
+              gateError.textContent = 'Contraseña incorrecta';
+              gateInput.value = '';
+              gateInput.focus();
+            }
+          }
+          gateBtn.addEventListener('click', tryUnlock);
+          gateInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') tryUnlock(); });
+          gateInput.focus();
+        });
+        gateEl.style.display = 'none';
       }
 
       // Resolver stream URL
@@ -483,6 +548,67 @@
           var fsPip = cbPip.getChild('fullscreenToggle');
           if (fsPip) cbPip.el().insertBefore(pipBtn, fsPip.el());
           else cbPip.el().appendChild(pipBtn);
+        }
+      }
+
+      // === AirPlay (Safari/WebKit only) ===
+      if (config.behavior && config.behavior.airplay) {
+        var vid = document.querySelector('video');
+        if (vid && vid.webkitShowPlaybackTargetPicker) {
+          var apBtn = document.createElement('div');
+          apBtn.className = 'vjs-control vjs-airplay-btn';
+          apBtn.setAttribute('role', 'button');
+          apBtn.title = 'AirPlay';
+          apBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>';
+          apBtn.addEventListener('click', function() { vid.webkitShowPlaybackTargetPicker(); });
+          var cbAp = player.getChild('controlBar');
+          if (cbAp) {
+            var fsAp = cbAp.getChild('fullscreenToggle');
+            if (fsAp) cbAp.el().insertBefore(apBtn, fsAp.el());
+            else cbAp.el().appendChild(apBtn);
+          }
+        }
+      }
+
+      // === Chromecast ===
+      if (config.behavior && config.behavior.chromecast) {
+        var castBtn = document.createElement('div');
+        castBtn.className = 'vjs-control vjs-cast-btn';
+        castBtn.setAttribute('role', 'button');
+        castBtn.title = 'Chromecast';
+        castBtn.style.display = 'none';
+        castBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>';
+
+        var castScript = document.createElement('script');
+        castScript.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+        document.head.appendChild(castScript);
+
+        window['__onGCastApiAvailable'] = function(isAvailable) {
+          if (!isAvailable) return;
+          var ctx = cast.framework.CastContext.getInstance();
+          ctx.setOptions({
+            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+          });
+          castBtn.style.display = '';
+          castBtn.addEventListener('click', function() {
+            ctx.requestSession().then(function() {
+              var session = ctx.getCurrentSession();
+              if (!session) return;
+              var src = player.currentSrc();
+              if (!src) return;
+              var mi = new chrome.cast.media.MediaInfo(src, 'application/x-mpegURL');
+              var req = new chrome.cast.media.LoadRequest(mi);
+              session.loadMedia(req);
+            }).catch(function(e) { console.log('Cast error:', e); });
+          });
+        };
+
+        var cbCast = player.getChild('controlBar');
+        if (cbCast) {
+          var fsCast = cbCast.getChild('fullscreenToggle');
+          if (fsCast) cbCast.el().insertBefore(castBtn, fsCast.el());
+          else cbCast.el().appendChild(castBtn);
         }
       }
 
