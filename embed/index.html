@@ -54,6 +54,64 @@
     @media (max-width: 768px) and (orientation: portrait) { .equalizer { height: 70px; padding: 0 1rem; } }
     @media (max-width: 768px) and (orientation: landscape) { .equalizer { height: 60px; padding: 0 1rem; } }
     @media (min-width: 769px) and (max-width: 1024px) { .equalizer { height: 100px; } }
+    /* Offline overlay */
+    #offline-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 40; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      background-size: cover; background-position: center; background-color: #000;
+    }
+    #offline-overlay.visible { display: flex; }
+    #offline-overlay .offline-msg {
+      color: #fff; font-family: Inter, sans-serif;
+      font-size: clamp(14px, 3vmin, 22px); font-weight: 600;
+      text-align: center; padding: 12px 24px;
+      background: rgba(0,0,0,0.6); border-radius: 8px;
+      max-width: 80%; backdrop-filter: blur(4px);
+    }
+    /* Retry overlay */
+    #retry-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 45; display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+    }
+    #retry-overlay.visible { display: flex; }
+    #retry-overlay .retry-msg {
+      color: #fff; font-family: Inter, sans-serif;
+      font-size: clamp(13px, 2.5vmin, 18px); font-weight: 500;
+      text-align: center; display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+    }
+    #retry-overlay .retry-spinner {
+      width: 28px; height: 28px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Quality button */
+    .vjs-quality-btn {
+      cursor: pointer;
+      font-size: clamp(11px, 1.5vw, 14px) !important;
+      font-weight: 700; font-family: Inter, sans-serif;
+    }
+    .vjs-quality-menu {
+      position: absolute; bottom: 100%; right: 0;
+      background: rgba(20,20,28,0.95);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 4px 0;
+      min-width: 100px; display: none;
+      backdrop-filter: blur(8px); margin-bottom: 6px;
+    }
+    .vjs-quality-menu.open { display: block; }
+    .vjs-quality-item {
+      display: block; width: 100%; padding: 6px 14px;
+      color: #ccc; font-size: 12px; font-family: Inter, sans-serif;
+      font-weight: 500; cursor: pointer; border: none;
+      background: none; text-align: left; white-space: nowrap;
+    }
+    .vjs-quality-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .vjs-quality-item.active { color: #8b6fff; font-weight: 700; }
     /* Loading */
     #loading {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -67,9 +125,12 @@
   <div id="loading">Cargando reproductor...</div>
   <div id="player" style="display:none;">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
+    <div id="offline-overlay"><div class="offline-msg"></div></div>
+    <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
   </div>
 
   <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script>
@@ -148,6 +209,14 @@
         playerDiv.style.backgroundImage = "url('" + config.background.image + "')";
       }
 
+      // Offline overlay config
+      var offlineEl = document.getElementById('offline-overlay');
+      var offlineMsg = offlineEl.querySelector('.offline-msg');
+      if (config.offline && config.offline.image) {
+        offlineEl.style.backgroundImage = "url('" + config.offline.image + "')";
+      }
+      offlineMsg.textContent = (config.offline && config.offline.message) ? config.offline.message : 'Sin señal disponible';
+
       // Mostrar player, ocultar loading
       playerDiv.style.display = '';
       loadEl.style.display = 'none';
@@ -155,7 +224,7 @@
       // Titulo
       document.title = (config.name || 'Ujjina Player') + ' - En Vivo';
 
-      // CSS dinamico — solo skin default
+      // CSS dinamico
       var css = '';
       var c = config.colors || {};
       var playRgba = hexToRgba(c.play, 0.85);
@@ -266,6 +335,113 @@
           });
         });
       }
+
+      // === Auto-retry on error ===
+      var retryCount = 0, maxRetries = 5, retryTimer = null;
+      var retryEl = document.getElementById('retry-overlay');
+
+      player.on('error', function() {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          retryEl.classList.add('visible');
+          retryTimer = setTimeout(function() {
+            retryEl.classList.remove('visible');
+            player.error(null);
+            var src = player.currentSources();
+            if (src && src.length) { player.src(src); player.play(); }
+          }, 5000);
+        } else {
+          retryEl.classList.remove('visible');
+          offlineEl.classList.add('visible');
+        }
+      });
+
+      player.on('playing', function() {
+        retryCount = 0;
+        retryEl.classList.remove('visible');
+        offlineEl.classList.remove('visible');
+      });
+
+      // === Quality Selector ===
+      (function() {
+        var ql = player.qualityLevels();
+        if (!ql) return;
+
+        var btn = document.createElement('div');
+        btn.className = 'vjs-control vjs-quality-btn';
+        btn.setAttribute('role', 'button');
+        btn.innerHTML = 'HD';
+
+        var menu = document.createElement('div');
+        menu.className = 'vjs-quality-menu';
+        btn.appendChild(menu);
+
+        btn.addEventListener('click', function(e) {
+          if (e.target.classList.contains('vjs-quality-item')) return;
+          menu.classList.toggle('open');
+        });
+        document.addEventListener('click', function(e) {
+          if (!btn.contains(e.target)) menu.classList.remove('open');
+        });
+
+        function buildMenu() {
+          menu.innerHTML = '';
+          var levels = [];
+          for (var i = 0; i < ql.length; i++) {
+            levels.push({ idx: i, h: ql[i].height || 0, w: ql[i].width || 0, bw: ql[i].bitrate || 0, enabled: ql[i].enabled });
+          }
+          if (levels.length < 2) { btn.style.display = 'none'; return; }
+          btn.style.display = '';
+          levels.sort(function(a, b) { return b.h - a.h; });
+
+          var auto = document.createElement('button');
+          auto.className = 'vjs-quality-item active';
+          auto.textContent = 'Auto';
+          auto.onclick = function() {
+            for (var i = 0; i < ql.length; i++) ql[i].enabled = true;
+            updateActive(-1);
+            menu.classList.remove('open');
+          };
+          menu.appendChild(auto);
+
+          levels.forEach(function(l) {
+            var item = document.createElement('button');
+            item.className = 'vjs-quality-item';
+            item.textContent = l.h ? l.h + 'p' : Math.round(l.bw / 1000) + 'k';
+            item.onclick = function() {
+              for (var i = 0; i < ql.length; i++) ql[i].enabled = (i === l.idx);
+              updateActive(l.idx);
+              menu.classList.remove('open');
+            };
+            menu.appendChild(item);
+          });
+        }
+
+        function updateActive(idx) {
+          var items = menu.querySelectorAll('.vjs-quality-item');
+          items.forEach(function(el) { el.classList.remove('active'); });
+          if (idx === -1) {
+            items[0].classList.add('active');
+            btn.innerHTML = 'AUTO';
+            btn.appendChild(menu);
+            return;
+          }
+          items.forEach(function(el) {
+            if (el.textContent === (ql[idx].height + 'p')) el.classList.add('active');
+          });
+          btn.innerHTML = ql[idx].height ? ql[idx].height + 'p' : 'HD';
+          btn.appendChild(menu);
+        }
+
+        ql.on('addqualitylevel', function() { setTimeout(buildMenu, 500); });
+
+        var cb = player.getChild('controlBar');
+        if (cb) {
+          var fs = cb.getChild('fullscreenToggle');
+          if (fs) cb.el().insertBefore(btn, fs.el());
+          else cb.el().appendChild(btn);
+        }
+      })();
     });
   </script>
 </body>
