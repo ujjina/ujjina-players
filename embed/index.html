@@ -218,14 +218,15 @@
         css += selector + ' .vjs-poster { background-color: transparent !important; }';
       }
 
-      // Barra gruesa — aplica en TODOS los skins
+      // Barra gruesa — solo skin default (cada tema tiene layout propio)
       var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
-      if (barSize === 'large') {
-        var bh = 'clamp(48px, 9vh, 70px)';
-        css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; padding: 0 !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-button > .vjs-icon-placeholder::before { font-size: clamp(20px, 2.8vw, 28px) !important; line-height: ' + bh + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 18px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
-        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.6vw, 15px) !important; line-height: ' + bh + ' !important; }';
+      if (!isTheme && barSize === 'large') {
+        var bh = 'clamp(40px, 8vh, 56px)';
+        css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
+        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
+        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.5vw, 14px) !important; line-height: ' + bh + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-icon-placeholder::before { font-size: clamp(18px, 2.5vw, 26px) !important; line-height: ' + bh + ' !important; }';
         css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; }';
         css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
         css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; }';
@@ -234,7 +235,7 @@
 
       // Fix LIVE text alignment para temas city, sea, fantasy
       if (skin === 'city' || skin === 'sea' || skin === 'fantasy') {
-        css += selector + ' .vjs-control-bar .vjs-live-display { display: flex !important; align-items: center !important; height: 100% !important; line-height: normal !important; }';
+        css += selector + ' .vjs-control-bar .vjs-live-display { align-self: center !important; line-height: normal !important; }';
       }
 
       // Ocultar error — siempre
