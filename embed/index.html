@@ -182,23 +182,28 @@
       // CSS dinamico
       var css = '';
       var c = config.colors || {};
-      var playRgba = hexToRgba(c.play, 0.85);
-      var playRgbaHover = hexToRgba(c.play, 1);
-      css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
-      css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
-      css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
-      css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
-      css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
-      css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
+      var isTheme = skin !== 'default';
+
+      // Colores personalizados — solo con skin default
+      if (!isTheme) {
+        var playRgba = hexToRgba(c.play, 0.85);
+        var playRgbaHover = hexToRgba(c.play, 1);
+        css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; }';
+        css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; }';
+        css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
+        css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
+        css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
+      }
 
       if (config.type === 'radio') {
         css += selector + ' { background-color: transparent !important; }';
         css += selector + ' .vjs-poster { background-color: transparent !important; }';
       }
 
-      // Barra gruesa
+      // Barra gruesa — solo con skin default
       var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
-      if (barSize === 'large') {
+      if (!isTheme && barSize === 'large') {
         css += selector + ' .vjs-control-bar { height: clamp(40px, 8vh, 56px) !important; }';
         css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
         css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: clamp(40px, 8vh, 56px) !important; padding: 0 0.3em !important; }';
@@ -209,6 +214,10 @@
         css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
         css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
       }
+
+      // Ocultar error — siempre
+      css += selector + ' .vjs-error-display { display: none !important; }';
+      css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
 
       var styleEl = document.createElement('style');
       styleEl.textContent = css;
