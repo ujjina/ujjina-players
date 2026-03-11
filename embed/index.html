@@ -469,12 +469,12 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         // Duration counter
         html += '  player.on("play",function(){playStart=Date.now()});';
         html += '  player.on("pause",function(){if(playStart){dur+=(Date.now()-playStart)/1000;playStart=0}});';
-        // Heartbeat every 60 seconds
+        // Heartbeat every 5 minutes (optimizado para free tier Firestore)
         html += '  setInterval(function(){';
         html += '    if(playStart){dur+=(Date.now()-playStart)/1000;playStart=Date.now()}';
         html += '    send("heartbeat");';
         html += '    bufCount=0;bufMs=0;errCount=0;';
-        html += '  },60000);';
+        html += '  },300000);';
         // End event on page unload
         html += '  window.addEventListener("beforeunload",function(){';
         html += '    if(playStart){dur+=(Date.now()-playStart)/1000}';
