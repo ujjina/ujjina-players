@@ -367,13 +367,12 @@
 
       // Subtitles/CC
       if (config.subtitles && config.subtitles.url) {
-        player.addRemoteTextTrack({
-          kind: 'subtitles',
-          src: config.subtitles.url,
-          srclang: 'es',
-          label: config.subtitles.label || 'Español',
-          default: false
-        }, false);
+        var track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.src = config.subtitles.url;
+        track.srclang = 'es';
+        track.label = config.subtitles.label || 'Español';
+        player.el().querySelector('video').appendChild(track);
       }
 
       // Logo overlay
