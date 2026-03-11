@@ -439,6 +439,49 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += 'player.el().appendChild(wm);';
         }
 
+        // Analytics tracking — solo en producción (embed), no en preview del panel
+        html += '(function(){';
+        html += '  var ANALYTICS_URL="https://panel.ujjina.com/api/analytics";';
+        html += '  var uid="' + uid + '",pid="' + pid + '";';
+        html += '  if(!uid||!pid)return;';
+        html += '  var sid=Date.now().toString(36)+Math.random().toString(36).substr(2,8);';
+        html += '  var dur=0,bufCount=0,bufMs=0,errCount=0,ttff=0,quality="",ref="";';
+        html += '  var bufStart=0,playStart=0,sent={};';
+        html += '  try{ref=document.referrer||window.parent!==window?document.referrer:"direct"}catch(e){ref="iframe"}';
+        // Time to first frame
+        html += '  var loadStart=Date.now();';
+        html += '  player.one("playing",function(){ttff=Date.now()-loadStart});';
+        // Buffer tracking
+        html += '  player.on("waiting",function(){if(!bufStart)bufStart=Date.now()});';
+        html += '  player.on("playing",function(){if(bufStart){bufMs+=Date.now()-bufStart;bufCount++;bufStart=0}});';
+        // Error tracking
+        html += '  player.on("error",function(){errCount++});';
+        // Quality tracking
+        html += '  if(player.qualityLevels){var ql=player.qualityLevels();ql.on("change",function(){var active=ql[ql.selectedIndex];if(active&&active.height)quality=active.height+"p"})}';
+        // Send function
+        html += '  function send(type,extra){';
+        html += '    var data={uid:uid,pid:pid,sid:sid,t:type,d:Math.round(dur),buf:bufCount,bufMs:Math.round(bufMs),err:errCount,ttff:Math.round(ttff),q:quality,ref:ref};';
+        html += '    if(extra)for(var k in extra)data[k]=extra[k];';
+        html += '    try{navigator.sendBeacon(ANALYTICS_URL,JSON.stringify(data))}catch(e){try{fetch(ANALYTICS_URL,{method:"POST",body:JSON.stringify(data),keepalive:true,headers:{"Content-Type":"application/json"}})}catch(e2){}}';
+        html += '  }';
+        // Start event
+        html += '  send("start");';
+        // Duration counter
+        html += '  player.on("play",function(){playStart=Date.now()});';
+        html += '  player.on("pause",function(){if(playStart){dur+=(Date.now()-playStart)/1000;playStart=0}});';
+        // Heartbeat every 60 seconds
+        html += '  setInterval(function(){';
+        html += '    if(playStart){dur+=(Date.now()-playStart)/1000;playStart=Date.now()}';
+        html += '    send("heartbeat");';
+        html += '    bufCount=0;bufMs=0;errCount=0;';
+        html += '  },60000);';
+        // End event on page unload
+        html += '  window.addEventListener("beforeunload",function(){';
+        html += '    if(playStart){dur+=(Date.now()-playStart)/1000}';
+        html += '    send("end");';
+        html += '  });';
+        html += '})();';
+
         html += '<\/script>';
         if (vttText) {
             html += '<script id="vtt-data" type="text/vtt">' + vttText.replace(/<\//g, '<\\/') + '<\/script>';
