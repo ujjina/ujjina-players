@@ -203,7 +203,9 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += '#player .video-js{position:absolute;top:0;left:0;width:100%;height:100%;background-color:transparent!important}';
         html += '#player .video-js .vjs-tech{background-color:transparent!important}';
         html += '#player .video-js .vjs-poster{background-color:transparent!important}';
-        html += '#player .video-js.vjs-has-started .vjs-tech{background-color:#000!important}';
+        if (config.type !== 'radio') {
+            html += '#player .video-js.vjs-has-started .vjs-tech{background-color:#000!important}';
+        }
         html += '#player .video-js .vjs-error-display{display:none!important}';
         html += '#player .video-js.vjs-error .vjs-big-play-button{display:block!important}';
         html += '.player-logo{position:absolute;z-index:30;pointer-events:none}';
@@ -248,10 +250,12 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += dynamicCss;
         html += '</style>';
         html += '</head><body>';
-        html += '<div id="player" style="' + bgStyle + '">';
+        html += '<div id="player">';
         html += '<video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"' + (posterUrl ? ' poster="' + posterUrl.replace(/"/g, '&quot;') + '"' : '') + '>';
         html += '</video>';
-        html += eqHtml;
+        if (config.type === 'radio' && eqHtml) {
+            html += '<div id="eq-holder" style="display:none">' + eqHtml + '</div>';
+        }
         // Offline overlay
         html += '<div id="offline-overlay"' + (offlineImg ? ' style="background-image:url(\'' + offlineImg.replace(/'/g, "\\'") + '\')"' : '') + '>';
         html += '<div class="offline-msg">' + offlineMsg.replace(/</g, '&lt;') + '</div>';
@@ -332,13 +336,26 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += '});';
         }
 
-        // Equalizer (radio)
-        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
-            html += 'var eq=document.querySelector(".equalizer");';
-            html += 'if(eq){';
-            html += 'player.on("play",function(){eq.classList.remove("idle");eq.classList.add("active");eq.querySelectorAll(".vertical").forEach(function(b){var d=b.style.getPropertyValue("--duration")||"0.8s";b.style.animation="eq "+d+" ease infinite alternate-reverse"})});';
-            html += 'player.on("pause",function(){eq.classList.remove("active");eq.classList.add("idle");eq.querySelectorAll(".vertical").forEach(function(b){b.style.animation="eqIdle 2s ease infinite alternate-reverse"})});';
-            html += '}';
+        // Radio: mover fondo y ecualizador dentro de Video.js (fullscreen-safe)
+        if (config.type === 'radio') {
+            if (config.background && config.background.image) {
+                html += 'player.ready(function(){';
+                html += '  var el=player.el();';
+                html += '  el.style.backgroundImage="url(\'' + config.background.image.replace(/'/g, "\\'") + '\')";';
+                html += '  el.style.backgroundSize="cover";el.style.backgroundPosition="center";el.style.backgroundRepeat="no-repeat";';
+                html += '});';
+            }
+            if (config.equalizer && config.equalizer.enabled) {
+                html += 'player.ready(function(){';
+                html += '  var holder=document.getElementById("eq-holder");';
+                html += '  if(holder){var eq=holder.querySelector(".equalizer");if(eq){player.el().appendChild(eq);holder.remove()}}';
+                html += '  var eq=document.querySelector(".equalizer");';
+                html += '  if(eq){';
+                html += '    player.on("play",function(){eq.classList.remove("idle");eq.classList.add("active");eq.querySelectorAll(".vertical").forEach(function(b){var d=b.style.getPropertyValue("--duration")||"0.8s";b.style.animation="eq "+d+" ease infinite alternate-reverse"})});';
+                html += '    player.on("pause",function(){eq.classList.remove("active");eq.classList.add("idle");eq.querySelectorAll(".vertical").forEach(function(b){b.style.animation="eqIdle 2s ease infinite alternate-reverse"})});';
+                html += '  }';
+                html += '});';
+            }
         }
 
         // Auto-retry on error
