@@ -1,609 +1,453 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Ujjina Player</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://vjs.zencdn.net/8.23.6/video-js.css" rel="stylesheet">
-  <style>
-    html, body {
-      width: 100%; height: 100%; height: 100dvh;
-      margin: 0; padding: 0; overflow: hidden;
-      background-color: #000;
-    }
-    #player {
-      position: relative;
-      width: 100%; height: 100%;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-    }
-    #player .video-js {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background-color: transparent !important;
-    }
-    #player .video-js .vjs-tech { background-color: transparent !important; }
-    #player .video-js .vjs-poster { background-color: transparent !important; }
-    #player .video-js.vjs-has-started .vjs-tech { background-color: #000 !important; }
-    /* Ocultar error */
-    #player .video-js .vjs-error-display { display: none !important; }
-    #player .video-js.vjs-error .vjs-big-play-button { display: block !important; }
-    /* Logo overlay */
-    .player-logo {
-      position: absolute; z-index: 30; pointer-events: none;
-    }
-    /* Ecualizador */
-    @keyframes eq { from { height: 100%; } to { height: 5px; } }
-    @keyframes eqIdle { from { height: 15px; } to { height: 5px; } }
-    .equalizer {
-      position: absolute; top: 50%; left: 0;
-      width: 100%; height: 120px;
-      transform: translateY(-50%);
-      display: flex; justify-content: space-between; align-items: flex-end;
-      padding: 0 2rem; box-sizing: border-box;
-      pointer-events: none; z-index: 10;
-      transition: opacity 0.5s ease;
-    }
-    .equalizer.active { opacity: 1; }
-    .equalizer.idle { opacity: 0.3; }
-    .equalizer .vertical {
-      flex: 1; margin: 0 2px; border-radius: 3px; height: 10px;
-    }
-    @media (max-width: 768px) and (orientation: portrait) { .equalizer { height: 70px; padding: 0 1rem; } }
-    @media (max-width: 768px) and (orientation: landscape) { .equalizer { height: 60px; padding: 0 1rem; } }
-    @media (min-width: 769px) and (max-width: 1024px) { .equalizer { height: 100px; } }
-    /* Offline overlay */
-    #offline-overlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 40; display: none; flex-direction: column;
-      align-items: center; justify-content: center;
-      background-size: cover; background-position: center; background-color: #000;
-    }
-    #offline-overlay.visible { display: flex; }
-    #offline-overlay .offline-msg {
-      color: #fff; font-family: Inter, sans-serif;
-      font-size: clamp(14px, 3vmin, 22px); font-weight: 600;
-      text-align: center; padding: 12px 24px;
-      background: rgba(0,0,0,0.6); border-radius: 8px;
-      max-width: 80%; backdrop-filter: blur(4px);
-    }
-    /* Retry overlay */
-    #retry-overlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 45; display: none; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-    }
-    #retry-overlay.visible { display: flex; }
-    #retry-overlay .retry-msg {
-      color: #fff; font-family: Inter, sans-serif;
-      font-size: clamp(13px, 2.5vmin, 18px); font-weight: 500;
-      text-align: center; display: flex; flex-direction: column;
-      align-items: center; gap: 10px;
-    }
-    #retry-overlay .retry-spinner {
-      width: 28px; height: 28px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: #fff; border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    /* Quality button */
-    .vjs-quality-btn {
-      cursor: pointer;
-      font-size: clamp(11px, 1.5vw, 14px) !important;
-      font-weight: 700; font-family: Inter, sans-serif;
-      display: flex; align-items: center; justify-content: center;
-      height: 100%; position: relative; padding: 0 0.5em;
-    }
-    .vjs-quality-menu {
-      position: absolute; bottom: 100%; right: 0;
-      background: rgba(20,20,28,0.95);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 8px; padding: 4px 0;
-      min-width: 100px; display: none;
-      backdrop-filter: blur(8px); margin-bottom: 6px;
-    }
-    .vjs-quality-menu.open { display: block; }
-    .vjs-quality-item {
-      display: block; width: 100%; padding: 6px 14px;
-      color: #ccc; font-size: 12px; font-family: Inter, sans-serif;
-      font-weight: 500; cursor: pointer; border: none;
-      background: none; text-align: left; white-space: nowrap;
-    }
-    .vjs-quality-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .vjs-quality-item.active { color: #8b6fff; font-weight: 700; }
-    /* Watermark */
-    @keyframes watermark-move {
-      0%   { top: 10%; left: 10%; }
-      25%  { top: 10%; left: 70%; }
-      50%  { top: 70%; left: 70%; }
-      75%  { top: 70%; left: 10%; }
-      100% { top: 10%; left: 10%; }
-    }
-    .watermark-overlay {
-      position: absolute; z-index: 35; pointer-events: none;
-      font-family: Inter, sans-serif; font-weight: 700;
-      font-size: clamp(12px, 2vmin, 18px); color: #fff;
-      white-space: nowrap; animation: watermark-move 30s linear infinite;
-    }
-    /* AirPlay / Chromecast */
-    .vjs-airplay-btn, .vjs-cast-btn {
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      height: 100%; padding: 0 0.5em;
-    }
-    .vjs-airplay-btn svg, .vjs-cast-btn svg { width: clamp(14px, 2vw, 18px); height: auto; fill: currentColor; }
-    /* Password gate */
-    #password-gate {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 60; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      background: #000; gap: 12px;
-    }
-    #password-gate .gate-title {
-      color: #fff; font-family: Inter, sans-serif;
-      font-size: clamp(14px, 3vmin, 20px); font-weight: 600;
-    }
-    #password-gate input {
-      padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.1); color: #fff; font-size: 14px;
-      font-family: Inter, sans-serif; outline: none; width: 220px; text-align: center;
-    }
-    #password-gate input:focus { border-color: #8b6fff; }
-    #password-gate button {
-      padding: 10px 28px; border-radius: 8px; border: none;
-      background: linear-gradient(135deg, #8b6fff, #5a3fd6); color: #fff;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      font-family: Inter, sans-serif;
-    }
-    #password-gate button:hover { opacity: 0.9; }
-    #password-gate .gate-error {
-      color: #ef4444; font-size: 12px; font-family: Inter, sans-serif;
-      min-height: 16px;
-    }
-    /* Loading */
-    #loading {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; align-items: center; justify-content: center;
-      color: #555; font-family: sans-serif; font-size: 14px;
-      z-index: 50;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ujjina Player</title>
+<style>
+html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;font-family:Inter,sans-serif}
+#loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;z-index:100}
+#loading .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#error-screen{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#ef4444;z-index:100;background:#000}
+#error-screen.visible{display:flex}
+</style>
 </head>
 <body>
-  <div id="loading">Cargando reproductor...</div>
-  <div id="password-gate" style="display:none;">
-    <div class="gate-title">Contenido protegido</div>
-    <input type="password" id="gate-input" placeholder="Ingresa la contrase&ntilde;a" autocomplete="off">
-    <button id="gate-btn">Acceder</button>
-    <div class="gate-error" id="gate-error"></div>
-  </div>
-  <div id="player" style="display:none;">
-    <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
-    <div id="offline-overlay"><div class="offline-msg"></div></div>
-    <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
-  </div>
+<div id="loading"><div class="spinner"></div><span>Cargando reproductor...</span></div>
+<div id="error-screen"><span id="error-msg">Error</span></div>
 
-  <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+(function() {
+    // Firebase config (same as panel)
     firebase.initializeApp({
-      apiKey: "AIzaSyBcKe_gKfU64C7lvFH0DZ41JcwbOrR7GxA",
-      authDomain: "ujjina-player-studio.firebaseapp.com",
-      projectId: "ujjina-player-studio",
-      storageBucket: "ujjina-player-studio.firebasestorage.app",
-      messagingSenderId: "277481746248",
-      appId: "1:277481746248:web:3c4e73663cc3a281880d7d"
+        apiKey: "AIzaSyBcKe_gKfU64C7lvFH0DZ41JcwbOrR7GxA",
+        authDomain: "ujjina-player-studio.firebaseapp.com",
+        projectId: "ujjina-player-studio",
+        storageBucket: "ujjina-player-studio.firebasestorage.app",
+        messagingSenderId: "277481746248",
+        appId: "1:277481746248:web:3c4e73663cc3a281880d7d"
     });
     var db = firebase.firestore();
 
-    function hexToRgba(hex, a) {
-      if (!hex) return 'rgba(0,0,0,' + a + ')';
-      hex = hex.replace('#', '');
-      return 'rgba(' + parseInt(hex.substring(0,2),16) + ',' + parseInt(hex.substring(2,4),16) + ',' + parseInt(hex.substring(4,6),16) + ',' + a + ')';
+    // Read uid & pid from URL
+    var params = new URLSearchParams(window.location.search);
+    var uid = params.get('uid');
+    var pid = params.get('pid');
+
+    if (!uid || !pid) {
+        showError('Parámetros uid y pid requeridos');
+        return;
     }
 
-    async function resolveStreamUrl(stream) {
-      if (stream.method === 'direct') return stream.url || '';
-      if (!stream.jsonUrl || !stream.jsonPath) return '';
-      try {
-        var ctrl = new AbortController();
-        var tid = setTimeout(function() { ctrl.abort(); }, 5000);
-        var resp = await fetch(stream.jsonUrl, { signal: ctrl.signal, cache: 'no-cache' });
-        clearTimeout(tid);
-        var data = await resp.json();
-        var parts = stream.jsonPath.split('.');
-        var val = data;
-        for (var i = 0; i < parts.length; i++) {
-          if (val == null) return '';
-          val = val[parts[i]];
-        }
-        return val || '';
-      } catch (e) {
-        console.error('JSON fetch error:', e);
-        return '';
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', async function() {
-      var params = new URLSearchParams(window.location.search);
-      var uid = params.get('uid');
-      var pid = params.get('pid');
-      var loadEl = document.getElementById('loading');
-
-      if (!uid || !pid) {
-        loadEl.textContent = 'Error: parametros uid/pid no proporcionados';
-        return;
-      }
-
-      // Cargar config de Firestore
-      var config;
-      try {
-        var doc = await db.collection('players').doc(uid).collection('list').doc(pid).get();
-        if (!doc.exists) {
-          loadEl.textContent = 'Reproductor no encontrado';
-          return;
-        }
-        config = doc.data();
-      } catch (e) {
-        loadEl.textContent = 'Error al cargar: ' + e.message;
-        return;
-      }
-
-      // === Password gate ===
-      if (config.protection && config.protection.enabled && config.protection.password) {
-        loadEl.style.display = 'none';
-        var gateEl = document.getElementById('password-gate');
-        gateEl.style.display = '';
-        var unlocked = await new Promise(function(resolve) {
-          var gateBtn = document.getElementById('gate-btn');
-          var gateInput = document.getElementById('gate-input');
-          var gateError = document.getElementById('gate-error');
-          function tryUnlock() {
-            if (gateInput.value === config.protection.password) {
-              resolve(true);
-            } else {
-              gateError.textContent = 'Contraseña incorrecta';
-              gateInput.value = '';
-              gateInput.focus();
+    // Load config from Firestore
+    db.collection('players').doc(uid).collection('list').doc(pid).get()
+        .then(function(doc) {
+            if (!doc.exists) {
+                showError('Reproductor no encontrado');
+                return;
             }
-          }
-          gateBtn.addEventListener('click', tryUnlock);
-          gateInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') tryUnlock(); });
-          gateInput.focus();
-        });
-        gateEl.style.display = 'none';
-      }
-
-      // Resolver stream URL
-      var streamUrl = await resolveStreamUrl(config.stream || {});
-
-      // Preparar contenedor
-      var playerDiv = document.getElementById('player');
-      var selector = '#player .video-js';
-
-      // Background image (radio)
-      if (config.type === 'radio' && config.background && config.background.image) {
-        playerDiv.style.backgroundImage = "url('" + config.background.image + "')";
-      }
-
-      // Offline overlay config
-      var offlineEl = document.getElementById('offline-overlay');
-      var offlineMsg = offlineEl.querySelector('.offline-msg');
-      if (config.offline && config.offline.image) {
-        offlineEl.style.backgroundImage = "url('" + config.offline.image + "')";
-      }
-      offlineMsg.textContent = (config.offline && config.offline.message) ? config.offline.message : 'Sin señal disponible';
-
-      // Mostrar player, ocultar loading
-      playerDiv.style.display = '';
-      loadEl.style.display = 'none';
-
-      // Titulo
-      document.title = (config.name || 'Ujjina Player') + ' - En Vivo';
-
-      // CSS dinamico
-      var css = '';
-      var c = config.colors || {};
-      var playRgba = hexToRgba(c.play, 0.85);
-      var playRgbaHover = hexToRgba(c.play, 1);
-
-      // Botón play circular
-      css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; font-size: clamp(40px, 10vmin, 80px) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; top: 50% !important; left: 50% !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
-      css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; transform: scale(1.1) !important; }';
-      css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
-
-      // Colores de barra
-      css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
-      css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
-      css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
-      css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
-
-      if (config.type === 'radio') {
-        css += selector + ' { background-color: transparent !important; }';
-        css += selector + ' .vjs-poster { background-color: transparent !important; }';
-        css += selector + '.vjs-has-started .vjs-tech { background-color: transparent !important; }';
-        css += selector + ' .vjs-tech { background-color: transparent !important; }';
-      }
-
-      // Barra gruesa
-      var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
-      if (barSize === 'large') {
-        var bh = 'clamp(40px, 8vh, 56px)';
-        css += selector + ' .vjs-control-bar { height: ' + bh + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-control { width: clamp(36px, 5vw, 52px) !important; font-size: clamp(14px, 2vw, 20px) !important; }';
-        css += selector + ' .vjs-control-bar .vjs-time-control { font-size: clamp(12px, 1.8vw, 16px) !important; line-height: ' + bh + ' !important; padding: 0 0.3em !important; }';
-        css += selector + ' .vjs-control-bar .vjs-live-display { font-size: clamp(11px, 1.5vw, 14px) !important; line-height: ' + bh + ' !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-icon-placeholder::before { font-size: clamp(18px, 2.5vw, 26px) !important; line-height: ' + bh + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel { width: clamp(100px, 15vw, 140px) !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-mute-control { width: clamp(30px, 4vw, 40px) !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel .vjs-volume-control { visibility: visible !important; opacity: 1 !important; width: clamp(60px, 10vw, 90px) !important; position: relative !important; display: flex !important; align-items: center !important; }';
-        css += selector + ' .vjs-control-bar .vjs-volume-panel.vjs-hover .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel:active .vjs-volume-control, ' + selector + ' .vjs-control-bar .vjs-volume-panel.vjs-slider-active .vjs-volume-control { width: clamp(60px, 10vw, 90px) !important; }';
-      }
-
-      // Ocultar error
-      css += selector + ' .vjs-error-display { display: none !important; }';
-      css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
-
-      var styleEl = document.createElement('style');
-      styleEl.textContent = css;
-      document.head.appendChild(styleEl);
-
-      // Poster (TV)
-      var posterUrl = (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
-
-      // Iniciar Video.js
-      var player = videojs('vjs-player', {
-        controls: config.behavior ? config.behavior.controls !== false : true,
-        autoplay: config.behavior ? !!config.behavior.autoplay : false,
-        liveui: config.behavior ? config.behavior.liveui !== false : true,
-        fluid: false,
-        poster: posterUrl,
-        sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
-      });
-
-      // Subtitles/CC
-      if (config.subtitles && config.subtitles.url) {
-        var track = document.createElement('track');
-        track.kind = 'subtitles';
-        track.src = config.subtitles.url;
-        track.srclang = 'es';
-        track.label = config.subtitles.label || 'Español';
-        player.el().querySelector('video').appendChild(track);
-      }
-
-      // Logo overlay
-      if (config.logo && config.logo.url) {
-        var logo = document.createElement('img');
-        logo.src = config.logo.url;
-        logo.className = 'player-logo';
-        logo.style.width = (config.logo.size || 60) + 'px';
-        logo.style.height = 'auto';
-        var pos = (config.logo.position || 'top-left').split('-');
-        logo.style[pos[0]] = '10px';
-        logo.style[pos[1]] = '10px';
-        logo.onerror = function() { this.style.display = 'none'; };
-        playerDiv.appendChild(logo);
-      }
-
-      // Ecualizador (Radio)
-      if (config.type === 'radio' && config.equalizer && config.equalizer.enabled !== false) {
-        var eq = document.createElement('div');
-        eq.className = 'equalizer idle';
-        var barColor = hexToRgba(
-          (config.equalizer.barColor || '#ffffff'),
-          (config.equalizer.opacity || 0.6)
-        );
-        var isMobile = window.innerWidth <= 768;
-        var barCount = isMobile ? 20 : 40;
-        for (var i = 0; i < barCount; i++) {
-          var bar = document.createElement('i');
-          bar.className = 'vertical';
-          var dur = (Math.random() * 0.9 + 0.3).toFixed(2);
-          bar.style.setProperty('--duration', dur + 's');
-          bar.style.backgroundColor = barColor;
-          bar.style.animation = 'eqIdle 2s ease infinite alternate-reverse';
-          eq.appendChild(bar);
-        }
-        playerDiv.appendChild(eq);
-
-        player.on('play', function() {
-          eq.classList.remove('idle');
-          eq.classList.add('active');
-          eq.querySelectorAll('.vertical').forEach(function(b) {
-            var d = b.style.getPropertyValue('--duration') || '0.8s';
-            b.style.animation = 'eq ' + d + ' ease infinite alternate-reverse';
-          });
-        });
-        player.on('pause', function() {
-          eq.classList.remove('active');
-          eq.classList.add('idle');
-          eq.querySelectorAll('.vertical').forEach(function(b) {
-            b.style.animation = 'eqIdle 2s ease infinite alternate-reverse';
-          });
-        });
-      }
-
-      // === Auto-retry on error ===
-      var retryCount = 0, maxRetries = 5, retryTimer = null;
-      var retryEl = document.getElementById('retry-overlay');
-
-      player.on('error', function() {
-        if (retryCount < maxRetries) {
-          retryCount++;
-          retryEl.classList.add('visible');
-          retryTimer = setTimeout(function() {
-            retryEl.classList.remove('visible');
-            player.error(null);
-            var src = player.currentSources();
-            if (src && src.length) { player.src(src); player.play(); }
-          }, 5000);
-        } else {
-          retryEl.classList.remove('visible');
-          offlineEl.classList.add('visible');
-        }
-      });
-
-      player.on('playing', function() {
-        retryCount = 0;
-        retryEl.classList.remove('visible');
-        offlineEl.classList.remove('visible');
-      });
-
-      // === Quality Selector ===
-      (function() {
-        var ql = player.qualityLevels();
-        if (!ql) return;
-
-        var btn = document.createElement('div');
-        btn.className = 'vjs-control vjs-quality-btn';
-        btn.setAttribute('role', 'button');
-        btn.innerHTML = 'HD';
-
-        var menu = document.createElement('div');
-        menu.className = 'vjs-quality-menu';
-        btn.appendChild(menu);
-
-        btn.addEventListener('click', function(e) {
-          if (e.target.classList.contains('vjs-quality-item')) return;
-          menu.classList.toggle('open');
-        });
-        document.addEventListener('click', function(e) {
-          if (!btn.contains(e.target)) menu.classList.remove('open');
+            var config = doc.data();
+            return resolveAndRender(config);
+        })
+        .catch(function(err) {
+            console.error('Firestore error:', err);
+            showError('Error al cargar configuración');
         });
 
-        function buildMenu() {
-          menu.innerHTML = '';
-          var levels = [];
-          for (var i = 0; i < ql.length; i++) {
-            levels.push({ idx: i, h: ql[i].height || 0, w: ql[i].width || 0, bw: ql[i].bitrate || 0, enabled: ql[i].enabled });
-          }
-          if (levels.length < 2) { btn.style.display = 'none'; return; }
-          btn.style.display = '';
-          levels.sort(function(a, b) { return b.h - a.h; });
-
-          var auto = document.createElement('button');
-          auto.className = 'vjs-quality-item active';
-          auto.textContent = 'Auto';
-          auto.onclick = function() {
-            for (var i = 0; i < ql.length; i++) ql[i].enabled = true;
-            updateActive(-1);
-            menu.classList.remove('open');
-          };
-          menu.appendChild(auto);
-
-          levels.forEach(function(l) {
-            var item = document.createElement('button');
-            item.className = 'vjs-quality-item';
-            item.textContent = l.h ? l.h + 'p' : Math.round(l.bw / 1000) + 'k';
-            item.onclick = function() {
-              for (var i = 0; i < ql.length; i++) ql[i].enabled = (i === l.idx);
-              updateActive(l.idx);
-              menu.classList.remove('open');
-            };
-            menu.appendChild(item);
-          });
+    async function resolveAndRender(config) {
+        // Resolve stream URL
+        var streamUrl = '';
+        if (config.stream) {
+            if (config.stream.method === 'direct') {
+                streamUrl = config.stream.url || '';
+            } else if (config.stream.jsonUrl && config.stream.jsonPath) {
+                try {
+                    var resp = await fetch(config.stream.jsonUrl);
+                    var data = await resp.json();
+                    var parts = config.stream.jsonPath.split('.');
+                    var value = data;
+                    for (var i = 0; i < parts.length; i++) {
+                        if (value == null) break;
+                        value = value[parts[i]];
+                    }
+                    streamUrl = value || '';
+                } catch (e) {
+                    console.warn('Error resolving JSON stream:', e);
+                }
+            }
         }
 
-        function updateActive(idx) {
-          var items = menu.querySelectorAll('.vjs-quality-item');
-          items.forEach(function(el) { el.classList.remove('active'); });
-          if (idx === -1) {
-            items[0].classList.add('active');
-            btn.innerHTML = 'AUTO';
-            btn.appendChild(menu);
-            return;
-          }
-          items.forEach(function(el) {
-            if (el.textContent === (ql[idx].height + 'p')) el.classList.add('active');
-          });
-          btn.innerHTML = ql[idx].height ? ql[idx].height + 'p' : 'HD';
-          btn.appendChild(menu);
+        // Download VTT via proxy if subtitles configured
+        var vttText = null;
+        if (config.subtitles && config.subtitles.url) {
+            try {
+                var proxyUrl = 'https://panel.ujjina.com/api/proxy-vtt?url=' + encodeURIComponent(config.subtitles.url);
+                var vttResp = await fetch(proxyUrl);
+                if (vttResp.ok) {
+                    vttText = await vttResp.text();
+                }
+            } catch (e) {
+                console.warn('Could not download VTT:', e);
+            }
         }
 
-        ql.on('addqualitylevel', function() { setTimeout(buildMenu, 500); });
+        // Build and render player
+        var html = buildPlayerHtml(config, streamUrl, vttText);
+        document.getElementById('loading').style.display = 'none';
+        document.open();
+        document.write(html);
+        document.close();
+    }
 
-        var cb = player.getChild('controlBar');
-        if (cb) {
-          var fs = cb.getChild('fullscreenToggle');
-          if (fs) cb.el().insertBefore(btn, fs.el());
-          else cb.el().appendChild(btn);
+    function showError(msg) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error-screen').classList.add('visible');
+        document.getElementById('error-msg').textContent = msg;
+    }
+
+    function hexToRgba(hex, alpha) {
+        if (!hex) return 'rgba(0,0,0,' + alpha + ')';
+        hex = hex.replace('#', '');
+        var r = parseInt(hex.substring(0, 2), 16) || 0;
+        var g = parseInt(hex.substring(2, 4), 16) || 0;
+        var b = parseInt(hex.substring(4, 6), 16) || 0;
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    function buildCss(config, selector) {
+        var css = '';
+        var c = config.colors || {};
+        var playRgba = hexToRgba(c.play, 0.85);
+        var playRgbaHover = hexToRgba(c.play, 1);
+
+        // Big play button
+        css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; font-size: clamp(4em, 10vmin, 8em) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; top: 50% !important; left: 50% !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
+        css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; transform: scale(1.1) !important; }';
+        css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
+
+        // Control bar colors
+        css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
+        css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
+        css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
+        css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
+
+        if (config.type === 'radio') {
+            css += selector + ' { background-color: transparent !important; }';
+            css += selector + ' .vjs-poster { background-color: transparent !important; }';
+            css += selector + '.vjs-has-started .vjs-tech { background-color: transparent !important; }';
+            css += selector + ' .vjs-tech { background-color: transparent !important; }';
         }
-      })();
 
-      // === AirPlay (Safari/WebKit only) ===
-      if (config.behavior && config.behavior.airplay) {
-        var vid = document.querySelector('video');
-        if (vid && vid.webkitShowPlaybackTargetPicker) {
-          var apBtn = document.createElement('div');
-          apBtn.className = 'vjs-control vjs-airplay-btn';
-          apBtn.setAttribute('role', 'button');
-          apBtn.title = 'AirPlay';
-          apBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>';
-          apBtn.addEventListener('click', function() { vid.webkitShowPlaybackTargetPicker(); });
-          var cbAp = player.getChild('controlBar');
-          if (cbAp) {
-            var fsAp = cbAp.getChild('fullscreenToggle');
-            if (fsAp) cbAp.el().insertBefore(apBtn, fsAp.el());
-            else cbAp.el().appendChild(apBtn);
-          }
+        // Large control bar
+        var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
+        if (barSize === 'large') {
+            css += selector + ' { font-size: 15px !important; }';
         }
-      }
 
-      // === Chromecast ===
-      if (config.behavior && config.behavior.chromecast) {
-        var castBtn = document.createElement('div');
-        castBtn.className = 'vjs-control vjs-cast-btn';
-        castBtn.setAttribute('role', 'button');
-        castBtn.title = 'Chromecast';
-        castBtn.style.display = 'none';
-        castBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>';
+        // Hide error display
+        css += selector + ' .vjs-error-display { display: none !important; }';
+        css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
 
-        var castScript = document.createElement('script');
-        castScript.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
-        document.head.appendChild(castScript);
+        return css;
+    }
 
-        window['__onGCastApiAvailable'] = function(isAvailable) {
-          if (!isAvailable) return;
-          var ctx = cast.framework.CastContext.getInstance();
-          ctx.setOptions({
-            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-          });
-          castBtn.style.display = '';
-          castBtn.addEventListener('click', function() {
-            ctx.requestSession().then(function() {
-              var session = ctx.getCurrentSession();
-              if (!session) return;
-              var src = player.currentSrc();
-              if (!src) return;
-              var mi = new chrome.cast.media.MediaInfo(src, 'application/x-mpegURL');
-              var req = new chrome.cast.media.LoadRequest(mi);
-              session.loadMedia(req);
-            }).catch(function(e) { console.log('Cast error:', e); });
-          });
-        };
-
-        var cbCast = player.getChild('controlBar');
-        if (cbCast) {
-          var fsCast = cbCast.getChild('fullscreenToggle');
-          if (fsCast) cbCast.el().insertBefore(castBtn, fsCast.el());
-          else cbCast.el().appendChild(castBtn);
+    function buildPlayerHtml(config, streamUrl, vttText) {
+        var posterUrl = (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
+        var bgStyle = '';
+        if (config.type === 'radio' && config.background && config.background.image) {
+            bgStyle = "background-image:url('" + config.background.image + "');background-size:cover;background-position:center;";
         }
-      }
 
-      // === Watermark (inside vjs container so it follows fullscreen) ===
-      if (config.watermark && config.watermark.enabled && config.watermark.text) {
-        var wm = document.createElement('div');
-        wm.className = 'watermark-overlay';
-        wm.style.opacity = config.watermark.opacity || 0.15;
-        wm.textContent = config.watermark.text;
-        player.el().appendChild(wm);
-      }
-    });
-  </script>
+        var selector = '#player .video-js';
+        var dynamicCss = buildCss(config, selector);
+
+        var eqCss = '';
+        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
+            eqCss = '@keyframes eq { from { height: 100%; } to { height: 5px; } } @keyframes eqIdle { from { height: 15px; } to { height: 5px; } } .equalizer { position: absolute; top: 50%; left: 0; width: 100%; height: 120px; transform: translateY(-50%); display: flex; justify-content: space-between; align-items: flex-end; padding: 0 2rem; box-sizing: border-box; pointer-events: none; z-index: 10; transition: opacity 0.5s ease; } .equalizer.active { opacity: 1; } .equalizer.idle { opacity: 0.3; } .equalizer .vertical { flex: 1; margin: 0 2px; border-radius: 3px; height: 10px; }';
+        }
+
+        var eqHtml = '';
+        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
+            var barColor = hexToRgba(config.equalizer.barColor, config.equalizer.opacity);
+            var barCount = 40;
+            eqHtml = '<div class="equalizer idle">';
+            for (var i = 0; i < barCount; i++) {
+                var dur = (Math.random() * 0.9 + 0.3).toFixed(2);
+                eqHtml += '<i class="vertical" style="--duration:' + dur + 's;background-color:' + barColor + ';animation:eqIdle 2s ease infinite alternate-reverse"></i>';
+            }
+            eqHtml += '</div>';
+        }
+
+        var logoHtml = '';
+        if (config.logo && config.logo.url) {
+            var pos = (config.logo.position || 'top-left').split('-');
+            logoHtml = '<img class="player-logo" src="' + config.logo.url.replace(/"/g, '&quot;') + '" style="width:' + (config.logo.size || 60) + 'px;height:auto;' + pos[0] + ':10px;' + pos[1] + ':10px;" onerror="this.style.display=\'none\'">';
+        }
+
+        // Offline overlay
+        var offlineImg = (config.offline && config.offline.image) ? config.offline.image : '';
+        var offlineMsg = (config.offline && config.offline.message) ? config.offline.message : 'Sin señal disponible';
+
+        var html = '<!doctype html><html lang="es"><head>';
+        html += '<meta charset="utf-8">';
+        html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+        html += '<link href="https://vjs.zencdn.net/8.23.6/video-js.css" rel="stylesheet">';
+        html += '<style>';
+        html += 'html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidden;background:#000}';
+        html += '#player{position:relative;width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat}';
+        html += '#player .video-js{position:absolute;top:0;left:0;width:100%;height:100%;background-color:transparent!important}';
+        html += '#player .video-js .vjs-tech{background-color:transparent!important}';
+        html += '#player .video-js .vjs-poster{background-color:transparent!important}';
+        html += '#player .video-js.vjs-has-started .vjs-tech{background-color:#000!important}';
+        html += '#player .video-js .vjs-error-display{display:none!important}';
+        html += '#player .video-js.vjs-error .vjs-big-play-button{display:block!important}';
+        html += '.player-logo{position:absolute;z-index:30;pointer-events:none}';
+        // Offline overlay CSS
+        html += '#offline-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background-size:cover;background-position:center;background-color:#000}';
+        html += '#offline-overlay.visible{display:flex}';
+        html += '#offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}';
+        // Retry overlay CSS
+        html += '#retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}';
+        html += '#retry-overlay.visible{display:flex}';
+        html += '#retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}';
+        html += '#retry-overlay .retry-spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}';
+        html += '@keyframes spin{to{transform:rotate(360deg)}}';
+        // Quality button CSS
+        html += '.vjs-quality-btn{cursor:pointer;font-size:1.2em!important;font-weight:700;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;width:4em;height:100%;position:relative;padding:0}';
+        html += '.vjs-quality-menu{position:absolute;bottom:100%;right:0;background:rgba(20,20,28,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:4px 0;min-width:100px;display:none;backdrop-filter:blur(8px);margin-bottom:6px}';
+        html += '.vjs-quality-menu.open{display:block}';
+        html += '.vjs-quality-item{display:block;width:100%;padding:6px 14px;color:#ccc;font-size:12px;font-family:Inter,sans-serif;font-weight:500;cursor:pointer;border:none;background:none;text-align:left;white-space:nowrap}';
+        html += '.vjs-quality-item:hover{background:rgba(255,255,255,0.08);color:#fff}';
+        html += '.vjs-quality-item.active{color:#8b6fff;font-weight:700}';
+        // Watermark CSS
+        html += '@keyframes watermark-move{0%{top:10%;left:10%}25%{top:10%;left:70%}50%{top:70%;left:70%}75%{top:70%;left:10%}100%{top:10%;left:10%}}';
+        html += '.watermark-overlay{position:absolute;z-index:35;pointer-events:none;font-family:Inter,sans-serif;font-weight:700;font-size:clamp(12px,2vmin,18px);color:#fff;white-space:nowrap;animation:watermark-move 30s linear infinite}';
+        // AirPlay / Chromecast button CSS
+        html += '.vjs-airplay-btn,.vjs-cast-btn{cursor:pointer;display:flex;align-items:center;justify-content:center;width:4em;height:100%;padding:0}';
+        html += '.vjs-airplay-btn svg,.vjs-cast-btn svg{width:1.8em;height:auto;fill:currentColor}';
+        // Password protection overlay CSS
+        html += '#password-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);backdrop-filter:blur(12px)}';
+        html += '#password-overlay.visible{display:flex}';
+        html += '#password-overlay .pw-box{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;max-width:320px;width:80%}';
+        html += '#password-overlay .pw-icon{width:48px;height:48px;opacity:0.7}';
+        html += '#password-overlay .pw-title{color:#fff;font-family:Inter,sans-serif;font-size:clamp(16px,3vmin,22px);font-weight:700;text-align:center;margin:0}';
+        html += '#password-overlay .pw-subtitle{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,14px);text-align:center;margin:0}';
+        html += '#password-overlay .pw-input{width:100%;padding:12px 16px;border:2px solid rgba(255,255,255,0.15);border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;font-size:16px;font-family:Inter,sans-serif;outline:none;text-align:center;box-sizing:border-box}';
+        html += '#password-overlay .pw-input:focus{border-color:rgba(139,111,255,0.6)}';
+        html += '#password-overlay .pw-input.error{border-color:#ef4444;animation:pw-shake 0.4s ease}';
+        html += '#password-overlay .pw-btn{width:100%;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,#8b6fff,#5ca0ff);color:#fff;font-size:15px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;transition:opacity 0.2s}';
+        html += '#password-overlay .pw-btn:hover{opacity:0.9}';
+        html += '#password-overlay .pw-error-msg{color:#ef4444;font-family:Inter,sans-serif;font-size:13px;min-height:18px}';
+        html += '@keyframes pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}';
+        html += eqCss;
+        html += dynamicCss;
+        html += '</style>';
+        html += '</head><body>';
+        html += '<div id="player" style="' + bgStyle + '">';
+        html += '<video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"' + (posterUrl ? ' poster="' + posterUrl.replace(/"/g, '&quot;') + '"' : '') + '>';
+        html += '</video>';
+        html += eqHtml;
+        // Offline overlay
+        html += '<div id="offline-overlay"' + (offlineImg ? ' style="background-image:url(\'' + offlineImg.replace(/'/g, "\\'") + '\')"' : '') + '>';
+        html += '<div class="offline-msg">' + offlineMsg.replace(/</g, '&lt;') + '</div>';
+        html += '</div>';
+        // Retry overlay
+        html += '<div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>';
+        // Password overlay
+        if (config.protection && config.protection.enabled && config.protection.password) {
+            html += '<div id="password-overlay" class="visible"><div class="pw-box">';
+            html += '<svg class="pw-icon" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+            html += '<p class="pw-title">Contenido protegido</p>';
+            html += '<p class="pw-subtitle">Ingresa la contraseña para ver este contenido</p>';
+            html += '<input type="password" class="pw-input" id="pw-input" placeholder="Contraseña" autocomplete="off">';
+            html += '<span class="pw-error-msg" id="pw-error"></span>';
+            html += '<button class="pw-btn" id="pw-btn">Acceder</button>';
+            html += '</div></div>';
+        }
+        html += '</div>';
+        html += '<script src="https://vjs.zencdn.net/8.23.6/video.min.js"><\/script>';
+        html += '<script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"><\/script>';
+        html += '<script>';
+        html += 'var player = videojs("vjs-player", {';
+        html += 'controls: ' + (config.behavior ? config.behavior.controls !== false : true) + ',';
+        html += 'autoplay: ' + (config.behavior ? !!config.behavior.autoplay : false) + ',';
+        html += 'liveui: ' + (config.behavior ? config.behavior.liveui !== false : true) + ',';
+        html += 'fluid: false,';
+        html += 'sources: ' + (streamUrl ? '[{src:"' + streamUrl.replace(/"/g, '\\"') + '",type:"application/x-mpegURL"}]' : '[]');
+        html += '});';
+
+        // Password protection
+        if (config.protection && config.protection.enabled && config.protection.password) {
+            var escapedPw = config.protection.password.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            html += '(function(){';
+            html += '  var overlay=document.getElementById("password-overlay");if(!overlay)return;';
+            html += '  var input=document.getElementById("pw-input");';
+            html += '  var btn=document.getElementById("pw-btn");';
+            html += '  var errEl=document.getElementById("pw-error");';
+            html += '  var correctPw="' + escapedPw + '";';
+            html += '  player.el().style.visibility="hidden";';
+            html += '  function unlock(){';
+            html += '    if(input.value===correctPw){';
+            html += '      overlay.classList.remove("visible");';
+            html += '      player.el().style.visibility="visible";';
+            html += '    }else{';
+            html += '      errEl.textContent="Contraseña incorrecta";';
+            html += '      input.classList.add("error");';
+            html += '      setTimeout(function(){input.classList.remove("error");errEl.textContent=""},1500);';
+            html += '    }';
+            html += '  }';
+            html += '  btn.addEventListener("click",unlock);';
+            html += '  input.addEventListener("keydown",function(e){if(e.key==="Enter")unlock()});';
+            html += '})();';
+        }
+
+        // Logo inside Video.js container (visible in fullscreen)
+        if (config.logo && config.logo.url) {
+            var logoUrl = config.logo.url.replace(/"/g, '\\"');
+            var logoPos = (config.logo.position || 'top-left').split('-');
+            var logoSize = config.logo.size || 60;
+            html += 'player.ready(function(){';
+            html += '  var logo=document.createElement("img");logo.className="player-logo";';
+            html += '  logo.src="' + logoUrl + '";';
+            html += '  logo.style.cssText="width:' + logoSize + 'px;height:auto;' + logoPos[0] + ':10px;' + logoPos[1] + ':10px;";';
+            html += '  logo.onerror=function(){this.style.display="none"};';
+            html += '  player.el().appendChild(logo);';
+            html += '});';
+        }
+
+        // Subtitles via embedded VTT text
+        if (vttText) {
+            var subLabel = (config.subtitles && config.subtitles.label || 'Español').replace(/"/g, '\\"');
+            html += 'player.ready(function(){';
+            html += '  var vtt=document.getElementById("vtt-data").textContent;';
+            html += '  var blob=new Blob([vtt],{type:"text/vtt"});';
+            html += '  var url=URL.createObjectURL(blob);';
+            html += '  var t=player.addRemoteTextTrack({kind:"captions",src:url,srclang:"es",label:"' + subLabel + '",default:true},false);';
+            html += '  t.track.mode="showing";';
+            html += '});';
+        }
+
+        // Equalizer (radio)
+        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
+            html += 'var eq=document.querySelector(".equalizer");';
+            html += 'if(eq){';
+            html += 'player.on("play",function(){eq.classList.remove("idle");eq.classList.add("active");eq.querySelectorAll(".vertical").forEach(function(b){var d=b.style.getPropertyValue("--duration")||"0.8s";b.style.animation="eq "+d+" ease infinite alternate-reverse"})});';
+            html += 'player.on("pause",function(){eq.classList.remove("active");eq.classList.add("idle");eq.querySelectorAll(".vertical").forEach(function(b){b.style.animation="eqIdle 2s ease infinite alternate-reverse"})});';
+            html += '}';
+        }
+
+        // Auto-retry on error
+        html += 'var retryCount=0,maxRetries=5,retryTimer=null;';
+        html += 'var retryEl=document.getElementById("retry-overlay");';
+        html += 'var offlineEl=document.getElementById("offline-overlay");';
+        html += 'player.on("error",function(){';
+        html += '  if(retryCount<maxRetries){';
+        html += '    retryCount++;retryEl.classList.add("visible");';
+        html += '    retryTimer=setTimeout(function(){';
+        html += '      retryEl.classList.remove("visible");';
+        html += '      player.error(null);';
+        html += '      var src=player.currentSources();if(src&&src.length){player.src(src);player.play();}';
+        html += '    },5000);';
+        html += '  } else {';
+        html += '    retryEl.classList.remove("visible");';
+        html += '    offlineEl.classList.add("visible");';
+        html += '  }';
+        html += '});';
+        html += 'player.on("playing",function(){retryCount=0;retryEl.classList.remove("visible");offlineEl.classList.remove("visible");});';
+
+        // Quality selector
+        html += '(function(){';
+        html += 'if(!player.qualityLevels)return;var ql=player.qualityLevels();if(!ql)return;';
+        html += 'var btn=document.createElement("div");';
+        html += 'btn.className="vjs-control vjs-quality-btn";btn.setAttribute("role","button");btn.innerHTML="HD";';
+        html += 'var menu=document.createElement("div");menu.className="vjs-quality-menu";btn.appendChild(menu);';
+        html += 'btn.addEventListener("click",function(e){if(e.target.classList.contains("vjs-quality-item"))return;menu.classList.toggle("open")});';
+        html += 'document.addEventListener("click",function(e){if(!btn.contains(e.target))menu.classList.remove("open")});';
+        html += 'function buildMenu(){';
+        html += '  menu.innerHTML="";var levels=[];';
+        html += '  for(var i=0;i<ql.length;i++){levels.push({idx:i,h:ql[i].height||0,w:ql[i].width||0,bw:ql[i].bitrate||0,enabled:ql[i].enabled})}';
+        html += '  if(levels.length<2){btn.style.display="none";return}';
+        html += '  btn.style.display="";';
+        html += '  levels.sort(function(a,b){return b.h-a.h});';
+        html += '  var auto=document.createElement("button");auto.className="vjs-quality-item active";auto.textContent="Auto";';
+        html += '  auto.onclick=function(){for(var i=0;i<ql.length;i++)ql[i].enabled=true;updateActive(-1);menu.classList.remove("open")};';
+        html += '  menu.appendChild(auto);';
+        html += '  levels.forEach(function(l){';
+        html += '    var item=document.createElement("button");item.className="vjs-quality-item";';
+        html += '    item.textContent=l.h?l.h+"p":Math.round(l.bw/1000)+"k";';
+        html += '    item.onclick=function(){for(var i=0;i<ql.length;i++)ql[i].enabled=(i===l.idx);updateActive(l.idx);menu.classList.remove("open")};';
+        html += '    menu.appendChild(item);';
+        html += '  });';
+        html += '}';
+        html += 'function updateActive(idx){';
+        html += '  var items=menu.querySelectorAll(".vjs-quality-item");';
+        html += '  items.forEach(function(el,i){el.classList.toggle("active",idx===-1?i===0:i===0?false:false)});';
+        html += '  if(idx===-1){items[0].classList.add("active");btn.innerHTML="AUTO";btn.appendChild(menu);return}';
+        html += '  items.forEach(function(el,i){if(i>0)el.classList.toggle("active",el.textContent===ql[idx].height+"p")});';
+        html += '  btn.innerHTML=ql[idx].height?ql[idx].height+"p":"HD";btn.appendChild(menu);';
+        html += '}';
+        html += 'ql.on("addqualitylevel",function(){setTimeout(buildMenu,500)});';
+        html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(btn,fs.el());else cb.el().appendChild(btn)}';
+        html += '})();';
+
+        // AirPlay button
+        if (config.behavior && config.behavior.airplay) {
+            html += '(function(){';
+            html += 'var vid=document.querySelector("video");if(!vid||!vid.webkitShowPlaybackTargetPicker)return;';
+            html += 'var apBtn=document.createElement("div");';
+            html += 'apBtn.className="vjs-control vjs-airplay-btn";apBtn.setAttribute("role","button");apBtn.title="AirPlay";';
+            html += 'apBtn.innerHTML=\'<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>\';';
+            html += 'apBtn.addEventListener("click",function(){vid.webkitShowPlaybackTargetPicker()});';
+            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(apBtn,fs.el());else cb.el().appendChild(apBtn)}';
+            html += '})();';
+        }
+
+        // Chromecast button
+        if (config.behavior && config.behavior.chromecast) {
+            html += '(function(){';
+            html += 'var castBtn=document.createElement("div");';
+            html += 'castBtn.className="vjs-control vjs-cast-btn";castBtn.setAttribute("role","button");castBtn.title="Chromecast";castBtn.style.display="none";';
+            html += 'castBtn.innerHTML=\'<svg viewBox="0 0 24 24"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>\';';
+            html += 'var scr=document.createElement("script");scr.src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";document.head.appendChild(scr);';
+            html += 'window["__onGCastApiAvailable"]=function(isAvailable){';
+            html += '  if(!isAvailable)return;';
+            html += '  var ctx=cast.framework.CastContext.getInstance();';
+            html += '  ctx.setOptions({receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,autoJoinPolicy:chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED});';
+            html += '  castBtn.style.display="";';
+            html += '  castBtn.addEventListener("click",function(){ctx.requestSession().then(function(){';
+            html += '    var session=ctx.getCurrentSession();if(!session)return;';
+            html += '    var src=player.currentSrc();if(!src)return;';
+            html += '    var mi=new chrome.cast.media.MediaInfo(src,"application/x-mpegURL");';
+            html += '    var req=new chrome.cast.media.LoadRequest(mi);';
+            html += '    session.loadMedia(req);';
+            html += '  }).catch(function(e){console.log("Cast error:",e)})});';
+            html += '};';
+            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(castBtn,fs.el());else cb.el().appendChild(castBtn)}';
+            html += '})();';
+        }
+
+        // Watermark
+        if (config.watermark && config.watermark.enabled && config.watermark.text) {
+            html += 'var wm=document.createElement("div");wm.className="watermark-overlay";';
+            html += 'wm.style.opacity=' + (config.watermark.opacity || 0.15) + ';';
+            html += 'wm.textContent="' + config.watermark.text.replace(/"/g, '\\"').replace(/</g, '&lt;') + '";';
+            html += 'player.el().appendChild(wm);';
+        }
+
+        html += '<\/script>';
+        if (vttText) {
+            html += '<script id="vtt-data" type="text/vtt">' + vttText.replace(/<\//g, '<\\/') + '<\/script>';
+        }
+        html += '</body></html>';
+
+        return html;
+    }
+})();
+</script>
 </body>
 </html>
