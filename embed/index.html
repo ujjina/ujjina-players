@@ -298,26 +298,33 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += '});';
 
         // Ad insertion — load IMA SDK dynamically to avoid document.write CORS block
+        // Play interceptor is set up IMMEDIATELY (before IMA loads) to catch first play
         if (config.ads && config.ads.enabled && config.ads.vastUrl) {
             var escapedVastUrl = config.ads.vastUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            var midrollCode = '';
-            if (config.ads.midroll) {
-                var midrollTime = config.ads.midrollTime || 300;
-                midrollCode = 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '"+Date.now())}});';
-            }
             html += '(function(){';
-            html += 'var imaScript=document.createElement("script");';
-            html += 'imaScript.src="https://imasdk.googleapis.com/js/sdkloader/ima3.js";';
-            html += 'imaScript.onload=function(){';
+            // State flags accessible to both the play interceptor and IMA onload
+            html += 'var _imaReady=false,_imaFailed=false,_prerolled=false,_pendingAd=false;';
             html += 'var adWrap=document.createElement("div");adWrap.id="ad-container";';
             html += 'adWrap.style.cssText="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;display:none;";';
             html += 'player.el().appendChild(adWrap);';
-            html += 'var adContainer=new google.ima.AdDisplayContainer(adWrap,player.el().querySelector("video"));';
-            html += 'var adsLoader=new google.ima.AdsLoader(adContainer);';
-            html += 'var adsManager=null;var adPlaying=false;';
-            html += 'function requestAd(tag){var req=new google.ima.AdsRequest();req.adTagUrl=tag;';
+            html += 'var adContainer,adsLoader,adsManager=null,adPlaying=false,requestAd;';
+            // Play interceptor — runs BEFORE IMA loads
+            html += 'player.on("play",function(){';
+            html += 'if(!_prerolled){_prerolled=true;player.pause();';
+            html += 'if(_imaReady){requestAd("' + escapedVastUrl + '"+Date.now())}';
+            html += 'else if(_imaFailed){player.play()}';
+            html += 'else{_pendingAd=true}';  // IMA still loading, flag it
+            html += '}});';
+            // Load IMA SDK dynamically
+            html += 'var imaScript=document.createElement("script");';
+            html += 'imaScript.src="https://imasdk.googleapis.com/js/sdkloader/ima3.js";';
+            html += 'imaScript.onload=function(){';
+            html += 'adContainer=new google.ima.AdDisplayContainer(adWrap,player.el().querySelector("video"));';
+            html += 'adsLoader=new google.ima.AdsLoader(adContainer);';
+            html += 'requestAd=function(tag){var req=new google.ima.AdsRequest();req.adTagUrl=tag;';
             html += 'req.linearAdSlotWidth=player.currentWidth();req.linearAdSlotHeight=player.currentHeight();';
-            html += 'adsLoader.requestAds(req)}';
+            html += 'adsLoader.requestAds(req)};';
+            // AdsManager loaded
             html += 'adsLoader.addEventListener(google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,function(e){';
             html += 'adsManager=e.getAdsManager(player.el().querySelector("video"));';
             html += 'adsManager.addEventListener(google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED,function(){player.pause();adWrap.style.display="block";adPlaying=true});';
@@ -327,11 +334,18 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += 'try{adContainer.initialize();adsManager.init(player.currentWidth(),player.currentHeight(),google.ima.ViewMode.NORMAL);adsManager.start()}catch(e){adWrap.style.display="none";player.play()}';
             html += '},false);';
             html += 'adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,function(){adWrap.style.display="none";player.play()},false);';
+            // Fullscreen resize
             html += 'player.on("fullscreenchange",function(){if(adsManager&&adPlaying){var m=player.isFullscreen()?google.ima.ViewMode.FULLSCREEN:google.ima.ViewMode.NORMAL;adsManager.resize(player.currentWidth(),player.currentHeight(),m)}});';
-            html += 'var _prerolled=false;player.on("play",function(){if(!_prerolled){_prerolled=true;player.pause();requestAd("' + escapedVastUrl + '"+Date.now())}});';
-            html += midrollCode;
+            // Mark IMA ready — if play was pending, fire the ad now
+            html += '_imaReady=true;';
+            html += 'if(_pendingAd){_pendingAd=false;requestAd("' + escapedVastUrl + '"+Date.now())}';
+            // Mid-roll
+            if (config.ads.midroll) {
+                var midrollTime = config.ads.midrollTime || 300;
+                html += 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '"+Date.now())}});';
+            }
             html += '};';  // end imaScript.onload
-            html += 'imaScript.onerror=function(){console.warn("IMA SDK failed to load")};';
+            html += 'imaScript.onerror=function(){_imaFailed=true;if(_pendingAd){_pendingAd=false;player.play()}};';
             html += 'document.head.appendChild(imaScript);';
             html += '})();';
         }
