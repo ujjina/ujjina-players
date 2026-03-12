@@ -4,26 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ujjina Player</title>
+<link href="https://vjs.zencdn.net/8.23.6/video-js.css" rel="stylesheet">
 <style>
-html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;font-family:Inter,sans-serif}
+html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidden;background:#000;font-family:Inter,sans-serif}
 #loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#fff;z-index:100}
 #loading .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #error-screen{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#ef4444;z-index:100;background:#000}
 #error-screen.visible{display:flex}
+#player{position:relative;width:100%;height:100%;display:none;background-size:cover;background-position:center;background-repeat:no-repeat}
+#player .video-js{position:absolute;top:0;left:0;width:100%;height:100%;background-color:transparent!important}
+#player .video-js .vjs-tech{background-color:transparent!important}
+#player .video-js .vjs-poster{background-color:transparent!important}
+#player .video-js .vjs-error-display{display:none!important}
+#player .video-js.vjs-error .vjs-big-play-button{display:block!important}
+.player-logo{position:absolute;z-index:30;pointer-events:none}
+#offline-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background-size:cover;background-position:center;background-color:#000}
+#offline-overlay.visible{display:flex}
+#offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}
+#retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}
+#retry-overlay.visible{display:flex}
+#retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
+#retry-overlay .retry-spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}
+.vjs-quality-btn{cursor:pointer;font-size:1.2em!important;font-weight:700;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;width:4em;height:100%;position:relative;padding:0}
+.vjs-quality-menu{position:absolute;bottom:100%;right:0;background:rgba(20,20,28,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:4px 0;min-width:100px;display:none;backdrop-filter:blur(8px);margin-bottom:6px}
+.vjs-quality-menu.open{display:block}
+.vjs-quality-item{display:block;width:100%;padding:6px 14px;color:#ccc;font-size:12px;font-family:Inter,sans-serif;font-weight:500;cursor:pointer;border:none;background:none;text-align:left;white-space:nowrap}
+.vjs-quality-item:hover{background:rgba(255,255,255,0.08);color:#fff}
+.vjs-quality-item.active{color:#8b6fff;font-weight:700}
+@keyframes watermark-move{0%{top:10%;left:10%}25%{top:10%;left:70%}50%{top:70%;left:70%}75%{top:70%;left:10%}100%{top:10%;left:10%}}
+.watermark-overlay{position:absolute;z-index:35;pointer-events:none;font-family:Inter,sans-serif;font-weight:700;font-size:clamp(12px,2vmin,18px);color:#fff;white-space:nowrap;animation:watermark-move 30s linear infinite}
+.vjs-airplay-btn,.vjs-cast-btn,.vjs-audio-btn{cursor:pointer;display:flex;align-items:center;justify-content:center;width:4em;height:100%;padding:0;position:relative}
+.vjs-airplay-btn svg,.vjs-cast-btn svg{width:1.8em;height:auto;fill:currentColor}
+.vjs-audio-btn svg{width:1.6em;height:1.6em}
+#password-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);backdrop-filter:blur(12px)}
+#password-overlay.visible{display:flex}
+#password-overlay .pw-box{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;max-width:320px;width:80%}
+#password-overlay .pw-icon{width:48px;height:48px;opacity:0.7}
+#password-overlay .pw-title{color:#fff;font-family:Inter,sans-serif;font-size:clamp(16px,3vmin,22px);font-weight:700;text-align:center;margin:0}
+#password-overlay .pw-subtitle{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,14px);text-align:center;margin:0}
+#password-overlay .pw-input{width:100%;padding:12px 16px;border:2px solid rgba(255,255,255,0.15);border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;font-size:16px;font-family:Inter,sans-serif;outline:none;text-align:center;box-sizing:border-box}
+#password-overlay .pw-input:focus{border-color:rgba(139,111,255,0.6)}
+#password-overlay .pw-input.error{border-color:#ef4444;animation:pw-shake 0.4s ease}
+#password-overlay .pw-btn{width:100%;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,#8b6fff,#5ca0ff);color:#fff;font-size:15px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;transition:opacity 0.2s}
+#password-overlay .pw-btn:hover{opacity:0.9}
+#password-overlay .pw-error-msg{color:#ef4444;font-family:Inter,sans-serif;font-size:13px;min-height:18px}
+@keyframes pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+@keyframes eq{from{height:100%}to{height:5px}}
+@keyframes eqIdle{from{height:15px}to{height:5px}}
+.equalizer{position:absolute;top:50%;left:0;width:100%;height:120px;transform:translateY(-50%);display:flex;justify-content:space-between;align-items:flex-end;padding:0 2rem;box-sizing:border-box;pointer-events:none;z-index:10;transition:opacity 0.5s ease}
+.equalizer.active{opacity:1}
+.equalizer.idle{opacity:0.3}
+.equalizer .vertical{flex:1;margin:0 2px;border-radius:3px;height:10px}
 </style>
+<style id="dynamic-css"></style>
 </head>
 <body>
 <div id="loading"><div class="spinner"></div><span>Cargando reproductor...</span></div>
 <div id="error-screen"><span id="error-msg">Error</span></div>
 
+<div id="player">
+    <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
+    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Sin señal disponible</div></div>
+    <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
+    <div id="password-overlay"><div class="pw-box">
+        <svg class="pw-icon" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <p class="pw-title">Contenido protegido</p>
+        <p class="pw-subtitle">Ingresa la contraseña para ver este contenido</p>
+        <input type="password" class="pw-input" id="pw-input" placeholder="Contraseña" autocomplete="off">
+        <span class="pw-error-msg" id="pw-error"></span>
+        <button class="pw-btn" id="pw-btn">Acceder</button>
+    </div></div>
+</div>
+
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- Video.js + Quality Levels -->
+<script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"></script>
 
 <script>
 (function() {
-    // Firebase config (same as panel)
+    // Firebase config
     firebase.initializeApp({
         apiKey: "AIzaSyBcKe_gKfU64C7lvFH0DZ41JcwbOrR7GxA",
         authDomain: "ujjina-player-studio.firebaseapp.com",
@@ -51,8 +114,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
                 showError('Reproductor no encontrado');
                 return;
             }
-            var config = doc.data();
-            return resolveAndRender(config);
+            return resolveAndRender(doc.data());
         })
         .catch(function(err) {
             console.error('Firestore error:', err);
@@ -96,12 +158,8 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             }
         }
 
-        // Build and render player
-        var html = buildPlayerHtml(config, streamUrl, vttText);
-        document.getElementById('loading').style.display = 'none';
-        document.open();
-        document.write(html);
-        document.close();
+        // Render player via DOM manipulation (NO document.write)
+        renderPlayer(config, streamUrl, vttText);
     }
 
     function showError(msg) {
@@ -119,484 +177,474 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
     }
 
-    function buildCss(config, selector) {
+    // Language map (global for multi-audio + track fix)
+    var _ln = {
+        en:"English",es:"Español",fr:"Français",de:"Deutsch",it:"Italiano",pt:"Português",
+        ja:"日本語",ko:"한국어",zh:"中文",ru:"Русский",ar:"العربية",hi:"हिन्दी",
+        nl:"Nederlands",pl:"Polski",tr:"Türkçe",sv:"Svenska",el:"Ελληνικά",th:"ไทย",
+        vi:"Tiếng Việt",id:"Indonesia",ms:"Melayu",uk:"Українська",cs:"Čeština",
+        ro:"Română",hu:"Magyar",da:"Dansk",fi:"Suomi",nb:"Norsk",he:"עברית"
+    };
+    function resolveLang(code) {
+        if (!code) return "";
+        if (_ln[code]) return _ln[code];
+        var base = code.split("-")[0];
+        if (_ln[base]) return _ln[base];
+        return code.toUpperCase();
+    }
+
+    function buildDynamicCss(config) {
         var css = '';
+        var sel = '#player .video-js';
         var c = config.colors || {};
         var playRgba = hexToRgba(c.play, 0.85);
         var playRgbaHover = hexToRgba(c.play, 1);
 
         // Big play button
-        css += selector + ' .vjs-big-play-button { background-color: ' + playRgba + ' !important; font-size: clamp(4em, 10vmin, 8em) !important; width: 1.5em !important; height: 1.5em !important; line-height: 1.5em !important; border-radius: 50% !important; border: 0.06em solid rgba(255,255,255,0.25) !important; padding: 0 !important; top: 50% !important; left: 50% !important; margin-top: -0.75em !important; margin-left: -0.75em !important; transition: background-color 0.3s ease, transform 0.2s ease !important; }';
-        css += selector + ' .vjs-big-play-button:hover { background-color: ' + playRgbaHover + ' !important; transform: scale(1.1) !important; }';
-        css += selector + ' .vjs-big-play-button .vjs-icon-placeholder::before { display: flex !important; align-items: center !important; justify-content: center !important; }';
+        css += sel + ' .vjs-big-play-button{background-color:' + playRgba + '!important;font-size:clamp(4em,10vmin,8em)!important;width:1.5em!important;height:1.5em!important;line-height:1.5em!important;border-radius:50%!important;border:0.06em solid rgba(255,255,255,0.25)!important;padding:0!important;top:50%!important;left:50%!important;margin-top:-0.75em!important;margin-left:-0.75em!important;transition:background-color 0.3s ease,transform 0.2s ease!important}';
+        css += sel + ' .vjs-big-play-button:hover{background-color:' + playRgbaHover + '!important;transform:scale(1.1)!important}';
+        css += sel + ' .vjs-big-play-button .vjs-icon-placeholder::before{display:flex!important;align-items:center!important;justify-content:center!important}';
 
         // Control bar colors
-        css += selector + ' .vjs-control-bar { background-color: ' + (c.controls || '#1a1a2e') + ' !important; }';
-        css += selector + ' .vjs-play-progress, ' + selector + ' .vjs-volume-level { background-color: ' + (c.progress || '#4a9eff') + ' !important; }';
-        css += selector + ' .vjs-control-bar .vjs-control { color: ' + (c.icons || '#fff') + ' !important; }';
-        css += selector + ' .vjs-time-control, ' + selector + ' .vjs-live-display { color: ' + (c.text || '#fff') + ' !important; }';
+        css += sel + ' .vjs-control-bar{background-color:' + (c.controls || '#1a1a2e') + '!important}';
+        css += sel + ' .vjs-play-progress,' + sel + ' .vjs-volume-level{background-color:' + (c.progress || '#4a9eff') + '!important}';
+        css += sel + ' .vjs-control-bar .vjs-control{color:' + (c.icons || '#fff') + '!important}';
+        css += sel + ' .vjs-time-control,' + sel + ' .vjs-live-display{color:' + (c.text || '#fff') + '!important}';
 
         if (config.type === 'radio') {
-            css += selector + ' { background-color: transparent !important; }';
-            css += selector + ' .vjs-poster { background-color: transparent !important; }';
-            css += selector + '.vjs-has-started .vjs-tech { background-color: transparent !important; }';
-            css += selector + ' .vjs-tech { background-color: transparent !important; }';
+            css += sel + '{background-color:transparent!important}';
+            css += sel + ' .vjs-poster{background-color:transparent!important}';
+            css += sel + '.vjs-has-started .vjs-tech{background-color:transparent!important}';
+            css += sel + ' .vjs-tech{background-color:transparent!important}';
+        } else {
+            css += sel + '.vjs-has-started .vjs-tech{background-color:#000!important}';
         }
 
         // Large control bar
         var barSize = (config.behavior && config.behavior.controlbarSize) || 'default';
         if (barSize === 'large') {
-            css += selector + ' { font-size: 15px !important; }';
+            css += sel + '{font-size:15px!important}';
         }
 
-        // Hide error display
-        css += selector + ' .vjs-error-display { display: none !important; }';
-        css += selector + '.vjs-error .vjs-big-play-button { display: block !important; }';
+        // EPG bar CSS (dynamic because position depends on config)
+        if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
+            var epgPos = config.epg.position || 'top';
+            css += '.epg-bar{position:absolute;' + (epgPos === 'top' ? 'top:0' : 'bottom:3em') + ';left:0;width:100%;z-index:25;display:flex;align-items:center;padding:8px 16px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:Inter,sans-serif;color:#fff;gap:12px;opacity:0;transition:opacity 0.3s;pointer-events:none;box-sizing:border-box}';
+            css += '.vjs-user-active .epg-bar,.vjs-paused .epg-bar{opacity:1}';
+            css += '.epg-label{text-transform:uppercase;font-size:clamp(8px,1.4vmin,10px);letter-spacing:1px;opacity:0.5;flex-shrink:0}';
+            css += '.epg-now{font-weight:700;font-size:clamp(11px,2vmin,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+            css += '.epg-sep{opacity:0.3;flex-shrink:0}';
+            css += '.epg-next{font-weight:400;font-size:clamp(10px,1.8vmin,13px);opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+        }
 
         return css;
     }
 
-    function buildPlayerHtml(config, streamUrl, vttText) {
-        var posterUrl = (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
-        var bgStyle = '';
-        if (config.type === 'radio' && config.background && config.background.image) {
-            bgStyle = "background-image:url('" + config.background.image + "');background-size:cover;background-position:center;";
+    function renderPlayer(config, streamUrl, vttText) {
+        // Hide loading, show player container
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('player').style.display = 'block';
+
+        // Inject dynamic CSS
+        document.getElementById('dynamic-css').textContent = buildDynamicCss(config);
+
+        // Set poster (TV only)
+        var videoEl = document.getElementById('vjs-player');
+        if (config.type === 'tv' && config.poster && config.poster.image) {
+            videoEl.setAttribute('poster', config.poster.image);
         }
 
-        var selector = '#player .video-js';
-        var dynamicCss = buildCss(config, selector);
-
-        var eqCss = '';
-        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
-            eqCss = '@keyframes eq { from { height: 100%; } to { height: 5px; } } @keyframes eqIdle { from { height: 15px; } to { height: 5px; } } .equalizer { position: absolute; top: 50%; left: 0; width: 100%; height: 120px; transform: translateY(-50%); display: flex; justify-content: space-between; align-items: flex-end; padding: 0 2rem; box-sizing: border-box; pointer-events: none; z-index: 10; transition: opacity 0.5s ease; } .equalizer.active { opacity: 1; } .equalizer.idle { opacity: 0.3; } .equalizer .vertical { flex: 1; margin: 0 2px; border-radius: 3px; height: 10px; }';
+        // Offline overlay config
+        var offlineEl = document.getElementById('offline-overlay');
+        var offlineMsgEl = document.getElementById('offline-msg');
+        if (config.offline && config.offline.image) {
+            offlineEl.style.backgroundImage = "url('" + config.offline.image.replace(/'/g, "\\'") + "')";
+        }
+        if (config.offline && config.offline.message) {
+            offlineMsgEl.textContent = config.offline.message;
         }
 
-        var eqHtml = '';
-        if (config.type === 'radio' && config.equalizer && config.equalizer.enabled) {
-            var barColor = hexToRgba(config.equalizer.barColor, config.equalizer.opacity);
-            var barCount = 40;
-            eqHtml = '<div class="equalizer idle">';
-            for (var i = 0; i < barCount; i++) {
-                var dur = (Math.random() * 0.9 + 0.3).toFixed(2);
-                eqHtml += '<i class="vertical" style="--duration:' + dur + 's;background-color:' + barColor + ';animation:eqIdle 2s ease infinite alternate-reverse"></i>';
+        // Password overlay — hide if not needed
+        var pwOverlay = document.getElementById('password-overlay');
+        if (!(config.protection && config.protection.enabled && config.protection.password)) {
+            pwOverlay.style.display = 'none';
+        } else {
+            pwOverlay.classList.add('visible');
+        }
+
+        // Initialize Video.js player
+        var player = videojs('vjs-player', {
+            controls: config.behavior ? config.behavior.controls !== false : true,
+            autoplay: config.behavior ? !!config.behavior.autoplay : false,
+            liveui: config.behavior ? config.behavior.liveui !== false : true,
+            fluid: false,
+            sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
+        });
+
+        // ─── Track label fix (audio + subtitles from HLS manifests) ───
+        (function() {
+            var _ut;
+            function schedUpd() {
+                clearTimeout(_ut);
+                _ut = setTimeout(function() {
+                    var at = player.audioTracks(), ac = {}, i, lb;
+                    for (i = 0; i < at.length; i++) { lb = at[i].label; if (!ac[lb]) ac[lb] = []; ac[lb].push(i); }
+                    for (lb in ac) { if (ac[lb].length > 1) for (i = 0; i < ac[lb].length; i++) at[ac[lb][i]].label = lb + ' ' + (i + 1); }
+                    var tt = player.textTracks(), tc = {};
+                    for (i = 0; i < tt.length; i++) { if (tt[i].kind === 'metadata') continue; lb = tt[i].label; if (!tc[lb]) tc[lb] = []; tc[lb].push(i); }
+                    for (lb in tc) { if (tc[lb].length > 1) for (i = 0; i < tc[lb].length; i++) tt[tc[lb][i]].label = lb + ' ' + (i + 1); }
+                    var cb = player.controlBar; if (!cb) return;
+                    var ab = cb.getChild('audioTrackButton'); if (ab) ab.update();
+                    var sb = cb.getChild('subsCapsButton'); if (sb) sb.update();
+                }, 600);
             }
-            eqHtml += '</div>';
-        }
+            function fix(t) {
+                var l = t.label || '';
+                if (!l || /^(stream|track|audio|subtitle|text)[_\s-]?\d*$/i.test(l)) {
+                    var n = resolveLang(t.language);
+                    if (n) { t.label = n; schedUpd(); }
+                }
+            }
+            function fixAll(list) {
+                for (var i = 0; i < list.length; i++) fix(list[i]);
+                list.addEventListener('addtrack', function(e) { if (e.track) fix(e.track); });
+            }
+            player.ready(function() { fixAll(player.audioTracks()); fixAll(player.textTracks()); });
+        })();
 
-        var logoHtml = '';
-        if (config.logo && config.logo.url) {
-            var pos = (config.logo.position || 'top-left').split('-');
-            logoHtml = '<img class="player-logo" src="' + config.logo.url.replace(/"/g, '&quot;') + '" style="width:' + (config.logo.size || 60) + 'px;height:auto;' + pos[0] + ':10px;' + pos[1] + ':10px;" onerror="this.style.display=\'none\'">';
-        }
-
-        // Offline overlay
-        var offlineImg = (config.offline && config.offline.image) ? config.offline.image : '';
-        var offlineMsg = (config.offline && config.offline.message) ? config.offline.message : 'Sin señal disponible';
-
-        var html = '<!doctype html><html lang="es"><head>';
-        html += '<meta charset="utf-8">';
-        html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-        html += '<link href="https://vjs.zencdn.net/8.23.6/video-js.css" rel="stylesheet">';
-        html += '<style>';
-        html += 'html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidden;background:#000}';
-        html += '#player{position:relative;width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat}';
-        html += '#player .video-js{position:absolute;top:0;left:0;width:100%;height:100%;background-color:transparent!important}';
-        html += '#player .video-js .vjs-tech{background-color:transparent!important}';
-        html += '#player .video-js .vjs-poster{background-color:transparent!important}';
-        if (config.type !== 'radio') {
-            html += '#player .video-js.vjs-has-started .vjs-tech{background-color:#000!important}';
-        }
-        html += '#player .video-js .vjs-error-display{display:none!important}';
-        html += '#player .video-js.vjs-error .vjs-big-play-button{display:block!important}';
-        html += '.player-logo{position:absolute;z-index:30;pointer-events:none}';
-        // Offline overlay CSS
-        html += '#offline-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background-size:cover;background-position:center;background-color:#000}';
-        html += '#offline-overlay.visible{display:flex}';
-        html += '#offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}';
-        // Retry overlay CSS
-        html += '#retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}';
-        html += '#retry-overlay.visible{display:flex}';
-        html += '#retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}';
-        html += '#retry-overlay .retry-spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}';
-        html += '@keyframes spin{to{transform:rotate(360deg)}}';
-        // Quality button CSS
-        html += '.vjs-quality-btn{cursor:pointer;font-size:1.2em!important;font-weight:700;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;width:4em;height:100%;position:relative;padding:0}';
-        html += '.vjs-quality-menu{position:absolute;bottom:100%;right:0;background:rgba(20,20,28,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:4px 0;min-width:100px;display:none;backdrop-filter:blur(8px);margin-bottom:6px}';
-        html += '.vjs-quality-menu.open{display:block}';
-        html += '.vjs-quality-item{display:block;width:100%;padding:6px 14px;color:#ccc;font-size:12px;font-family:Inter,sans-serif;font-weight:500;cursor:pointer;border:none;background:none;text-align:left;white-space:nowrap}';
-        html += '.vjs-quality-item:hover{background:rgba(255,255,255,0.08);color:#fff}';
-        html += '.vjs-quality-item.active{color:#8b6fff;font-weight:700}';
-        // Watermark CSS
-        html += '@keyframes watermark-move{0%{top:10%;left:10%}25%{top:10%;left:70%}50%{top:70%;left:70%}75%{top:70%;left:10%}100%{top:10%;left:10%}}';
-        html += '.watermark-overlay{position:absolute;z-index:35;pointer-events:none;font-family:Inter,sans-serif;font-weight:700;font-size:clamp(12px,2vmin,18px);color:#fff;white-space:nowrap;animation:watermark-move 30s linear infinite}';
-        // AirPlay / Chromecast / Audio button CSS
-        html += '.vjs-airplay-btn,.vjs-cast-btn,.vjs-audio-btn{cursor:pointer;display:flex;align-items:center;justify-content:center;width:4em;height:100%;padding:0;position:relative}';
-        html += '.vjs-airplay-btn svg,.vjs-cast-btn svg{width:1.8em;height:auto;fill:currentColor}';
-        html += '.vjs-audio-btn svg{width:1.6em;height:1.6em}';
-        // Password protection overlay CSS
-        html += '#password-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);backdrop-filter:blur(12px)}';
-        html += '#password-overlay.visible{display:flex}';
-        html += '#password-overlay .pw-box{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;max-width:320px;width:80%}';
-        html += '#password-overlay .pw-icon{width:48px;height:48px;opacity:0.7}';
-        html += '#password-overlay .pw-title{color:#fff;font-family:Inter,sans-serif;font-size:clamp(16px,3vmin,22px);font-weight:700;text-align:center;margin:0}';
-        html += '#password-overlay .pw-subtitle{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,14px);text-align:center;margin:0}';
-        html += '#password-overlay .pw-input{width:100%;padding:12px 16px;border:2px solid rgba(255,255,255,0.15);border-radius:8px;background:rgba(255,255,255,0.08);color:#fff;font-size:16px;font-family:Inter,sans-serif;outline:none;text-align:center;box-sizing:border-box}';
-        html += '#password-overlay .pw-input:focus{border-color:rgba(139,111,255,0.6)}';
-        html += '#password-overlay .pw-input.error{border-color:#ef4444;animation:pw-shake 0.4s ease}';
-        html += '#password-overlay .pw-btn{width:100%;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,#8b6fff,#5ca0ff);color:#fff;font-size:15px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;transition:opacity 0.2s}';
-        html += '#password-overlay .pw-btn:hover{opacity:0.9}';
-        html += '#password-overlay .pw-error-msg{color:#ef4444;font-family:Inter,sans-serif;font-size:13px;min-height:18px}';
-        html += '@keyframes pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}';
-        // EPG bar CSS
-        if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
-            var epgPos = config.epg.position || 'top';
-            html += '.epg-bar{position:absolute;' + (epgPos === 'top' ? 'top:0' : 'bottom:3em') + ';left:0;width:100%;z-index:25;display:flex;align-items:center;padding:8px 16px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:Inter,sans-serif;color:#fff;gap:12px;opacity:0;transition:opacity 0.3s;pointer-events:none;box-sizing:border-box}';
-            html += '.vjs-user-active .epg-bar,.vjs-paused .epg-bar{opacity:1}';
-            html += '.epg-label{text-transform:uppercase;font-size:clamp(8px,1.4vmin,10px);letter-spacing:1px;opacity:0.5;flex-shrink:0}';
-            html += '.epg-now{font-weight:700;font-size:clamp(11px,2vmin,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-            html += '.epg-sep{opacity:0.3;flex-shrink:0}';
-            html += '.epg-next{font-weight:400;font-size:clamp(10px,1.8vmin,13px);opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
-        }
-        html += eqCss;
-        html += dynamicCss;
-        html += '</style>';
-        html += '</head><body>';
-        html += '<div id="player">';
-        html += '<video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"' + (posterUrl ? ' poster="' + posterUrl.replace(/"/g, '&quot;') + '"' : '') + '>';
-        html += '</video>';
-        if (config.type === 'radio' && eqHtml) {
-            html += '<div id="eq-holder" style="display:none">' + eqHtml + '</div>';
-        }
-        // Offline overlay
-        html += '<div id="offline-overlay"' + (offlineImg ? ' style="background-image:url(\'' + offlineImg.replace(/'/g, "\\'") + '\')"' : '') + '>';
-        html += '<div class="offline-msg">' + offlineMsg.replace(/</g, '&lt;') + '</div>';
-        html += '</div>';
-        // Retry overlay
-        html += '<div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>';
-        // Password overlay
+        // ─── Password protection ───
         if (config.protection && config.protection.enabled && config.protection.password) {
-            html += '<div id="password-overlay" class="visible"><div class="pw-box">';
-            html += '<svg class="pw-icon" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-            html += '<p class="pw-title">Contenido protegido</p>';
-            html += '<p class="pw-subtitle">Ingresa la contraseña para ver este contenido</p>';
-            html += '<input type="password" class="pw-input" id="pw-input" placeholder="Contraseña" autocomplete="off">';
-            html += '<span class="pw-error-msg" id="pw-error"></span>';
-            html += '<button class="pw-btn" id="pw-btn">Acceder</button>';
-            html += '</div></div>';
-        }
-        html += '</div>';
-        html += '<script src="https://vjs.zencdn.net/8.23.6/video.min.js"><\/script>';
-        html += '<script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"><\/script>';
-        html += '<script>';
-        html += 'var player = videojs("vjs-player", {';
-        html += 'controls: ' + (config.behavior ? config.behavior.controls !== false : true) + ',';
-        html += 'autoplay: ' + (config.behavior ? !!config.behavior.autoplay : false) + ',';
-        html += 'liveui: ' + (config.behavior ? config.behavior.liveui !== false : true) + ',';
-        html += 'fluid: false,';
-        html += 'sources: ' + (streamUrl ? '[{src:"' + streamUrl.replace(/"/g, '\\"') + '",type:"application/x-mpegURL"}]' : '[]');
-        html += '});';
-
-        // Language map + resolver (global scope so multi-audio can use it too)
-        html += 'var _ln={en:"English",es:"Espa\\u00f1ol",fr:"Fran\\u00e7ais",de:"Deutsch",it:"Italiano",pt:"Portugu\\u00eas",ja:"\\u65e5\\u672c\\u8a9e",ko:"\\ud55c\\uad6d\\uc5b4",zh:"\\u4e2d\\u6587",ru:"\\u0420\\u0443\\u0441\\u0441\\u043a\\u0438\\u0439",ar:"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629",hi:"\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940",nl:"Nederlands",pl:"Polski",tr:"T\\u00fcrk\\u00e7e",sv:"Svenska",el:"\\u0395\\u03bb\\u03bb\\u03b7\\u03bd\\u03b9\\u03ba\\u03ac",th:"\\u0e44\\u0e17\\u0e22",vi:"Ti\\u1ebfng Vi\\u1ec7t",id:"Indonesia",ms:"Melayu",uk:"\\u0423\\u043a\\u0440\\u0430\\u0457\\u043d\\u0441\\u044c\\u043a\\u0430",cs:"\\u010ce\\u0161tina",ro:"Rom\\u00e2n\\u0103",hu:"Magyar",da:"Dansk",fi:"Suomi",nb:"Norsk",he:"\\u05e2\\u05d1\\u05e8\\u05d9\\u05ea"};';
-        html += 'function resolveLang(code){if(!code)return"";if(_ln[code])return _ln[code];var base=code.split("-")[0];if(_ln[base])return _ln[base];return code.toUpperCase()}';
-
-        // Fix generic track labels (audio + subtitles) from HLS manifests
-        // After fixing, force Video.js native menus to rebuild
-        html += '(function(){';
-        html += 'var _ut;function schedUpd(){clearTimeout(_ut);_ut=setTimeout(function(){';
-        html += 'var at=player.audioTracks(),ac={},i,lb;';
-        html += 'for(i=0;i<at.length;i++){lb=at[i].label;if(!ac[lb])ac[lb]=[];ac[lb].push(i)}';
-        html += 'for(lb in ac){if(ac[lb].length>1)for(i=0;i<ac[lb].length;i++)at[ac[lb][i]].label=lb+" "+(i+1)}';
-        html += 'var tt=player.textTracks(),tc={};';
-        html += 'for(i=0;i<tt.length;i++){if(tt[i].kind==="metadata")continue;lb=tt[i].label;if(!tc[lb])tc[lb]=[];tc[lb].push(i)}';
-        html += 'for(lb in tc){if(tc[lb].length>1)for(i=0;i<tc[lb].length;i++)tt[tc[lb][i]].label=lb+" "+(i+1)}';
-        html += 'var cb=player.controlBar;if(!cb)return;';
-        html += 'var ab=cb.getChild("audioTrackButton");if(ab)ab.update();';
-        html += 'var sb=cb.getChild("subsCapsButton");if(sb)sb.update();';
-        html += '},600)}';
-        html += 'function fix(t){var l=t.label||"";if(!l||/^(stream|track|audio|subtitle|text)[_\\s-]?\\d*$/i.test(l)){var n=resolveLang(t.language);if(n){t.label=n;schedUpd()}}}';
-        html += 'function fixAll(list){for(var i=0;i<list.length;i++)fix(list[i]);list.addEventListener("addtrack",function(e){if(e.track)fix(e.track)})}';
-        html += 'player.ready(function(){fixAll(player.audioTracks());fixAll(player.textTracks())});';
-        html += '})();';
-
-        // Password protection
-        if (config.protection && config.protection.enabled && config.protection.password) {
-            var escapedPw = config.protection.password.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            html += '(function(){';
-            html += '  var overlay=document.getElementById("password-overlay");if(!overlay)return;';
-            html += '  var input=document.getElementById("pw-input");';
-            html += '  var btn=document.getElementById("pw-btn");';
-            html += '  var errEl=document.getElementById("pw-error");';
-            html += '  var correctPw="' + escapedPw + '";';
-            html += '  player.el().style.visibility="hidden";';
-            html += '  function unlock(){';
-            html += '    if(input.value===correctPw){';
-            html += '      overlay.classList.remove("visible");';
-            html += '      player.el().style.visibility="visible";';
-            html += '    }else{';
-            html += '      errEl.textContent="Contraseña incorrecta";';
-            html += '      input.classList.add("error");';
-            html += '      setTimeout(function(){input.classList.remove("error");errEl.textContent=""},1500);';
-            html += '    }';
-            html += '  }';
-            html += '  btn.addEventListener("click",unlock);';
-            html += '  input.addEventListener("keydown",function(e){if(e.key==="Enter")unlock()});';
-            html += '})();';
+            var pwInput = document.getElementById('pw-input');
+            var pwBtn = document.getElementById('pw-btn');
+            var pwError = document.getElementById('pw-error');
+            var correctPw = config.protection.password;
+            player.el().style.visibility = 'hidden';
+            function unlock() {
+                if (pwInput.value === correctPw) {
+                    pwOverlay.classList.remove('visible');
+                    player.el().style.visibility = 'visible';
+                } else {
+                    pwError.textContent = 'Contraseña incorrecta';
+                    pwInput.classList.add('error');
+                    setTimeout(function() { pwInput.classList.remove('error'); pwError.textContent = ''; }, 1500);
+                }
+            }
+            pwBtn.addEventListener('click', unlock);
+            pwInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') unlock(); });
         }
 
-        // Logo inside Video.js container (visible in fullscreen)
+        // ─── Logo inside Video.js container (fullscreen-safe) ───
         if (config.logo && config.logo.url) {
-            var logoUrl = config.logo.url.replace(/"/g, '\\"');
-            var logoPos = (config.logo.position || 'top-left').split('-');
-            var logoSize = config.logo.size || 60;
-            html += 'player.ready(function(){';
-            html += '  var logo=document.createElement("img");logo.className="player-logo";';
-            html += '  logo.src="' + logoUrl + '";';
-            html += '  logo.style.cssText="width:' + logoSize + 'px;height:auto;' + logoPos[0] + ':10px;' + logoPos[1] + ':10px;";';
-            html += '  logo.onerror=function(){this.style.display="none"};';
-            html += '  player.el().appendChild(logo);';
-            html += '});';
+            player.ready(function() {
+                var logo = document.createElement('img');
+                logo.className = 'player-logo';
+                logo.src = config.logo.url;
+                var pos = (config.logo.position || 'top-left').split('-');
+                var size = config.logo.size || 60;
+                logo.style.cssText = 'width:' + size + 'px;height:auto;' + pos[0] + ':10px;' + pos[1] + ':10px;';
+                logo.onerror = function() { this.style.display = 'none'; };
+                player.el().appendChild(logo);
+            });
         }
 
-        // Subtitles via embedded VTT text
+        // ─── Subtitles via embedded VTT text ───
         if (vttText) {
-            var subLabel = (config.subtitles && config.subtitles.label || 'Español').replace(/"/g, '\\"');
-            html += 'player.ready(function(){';
-            html += '  var vtt=document.getElementById("vtt-data").textContent;';
-            html += '  var blob=new Blob([vtt],{type:"text/vtt"});';
-            html += '  var url=URL.createObjectURL(blob);';
-            html += '  var t=player.addRemoteTextTrack({kind:"captions",src:url,srclang:"es",label:"' + subLabel + '",default:true},false);';
-            html += '  t.track.mode="showing";';
-            html += '});';
+            player.ready(function() {
+                var blob = new Blob([vttText], { type: 'text/vtt' });
+                var url = URL.createObjectURL(blob);
+                var subLabel = (config.subtitles && config.subtitles.label) || 'Español';
+                var t = player.addRemoteTextTrack({ kind: 'captions', src: url, srclang: 'es', label: subLabel, default: true }, false);
+                t.track.mode = 'showing';
+            });
         }
 
-        // Radio: mover fondo y ecualizador dentro de Video.js (fullscreen-safe)
+        // ─── Radio: background + equalizer inside player.el (fullscreen-safe) ───
         if (config.type === 'radio') {
             if (config.background && config.background.image) {
-                html += 'player.ready(function(){';
-                html += '  var el=player.el();';
-                html += '  el.style.backgroundImage="url(\'' + config.background.image.replace(/'/g, "\\'") + '\')";';
-                html += '  el.style.backgroundSize="cover";el.style.backgroundPosition="center";el.style.backgroundRepeat="no-repeat";';
-                html += '});';
+                player.ready(function() {
+                    var el = player.el();
+                    el.style.backgroundImage = "url('" + config.background.image.replace(/'/g, "\\'") + "')";
+                    el.style.backgroundSize = 'cover';
+                    el.style.backgroundPosition = 'center';
+                    el.style.backgroundRepeat = 'no-repeat';
+                });
             }
             if (config.equalizer && config.equalizer.enabled) {
-                html += 'player.ready(function(){';
-                html += '  var holder=document.getElementById("eq-holder");';
-                html += '  if(holder){var eq=holder.querySelector(".equalizer");if(eq){player.el().appendChild(eq);holder.remove()}}';
-                html += '  var eq=document.querySelector(".equalizer");';
-                html += '  if(eq){';
-                html += '    player.on("play",function(){eq.classList.remove("idle");eq.classList.add("active");eq.querySelectorAll(".vertical").forEach(function(b){var d=b.style.getPropertyValue("--duration")||"0.8s";b.style.animation="eq "+d+" ease infinite alternate-reverse"})});';
-                html += '    player.on("pause",function(){eq.classList.remove("active");eq.classList.add("idle");eq.querySelectorAll(".vertical").forEach(function(b){b.style.animation="eqIdle 2s ease infinite alternate-reverse"})});';
-                html += '  }';
-                html += '});';
+                // Create equalizer bars
+                var eqDiv = document.createElement('div');
+                eqDiv.className = 'equalizer idle';
+                var barColor = hexToRgba(config.equalizer.barColor, config.equalizer.opacity);
+                for (var eb = 0; eb < 40; eb++) {
+                    var bar = document.createElement('i');
+                    bar.className = 'vertical';
+                    var dur = (Math.random() * 0.9 + 0.3).toFixed(2);
+                    bar.style.cssText = '--duration:' + dur + 's;background-color:' + barColor + ';animation:eqIdle 2s ease infinite alternate-reverse';
+                    eqDiv.appendChild(bar);
+                }
+                player.ready(function() {
+                    player.el().appendChild(eqDiv);
+                    player.on('play', function() {
+                        eqDiv.classList.remove('idle');
+                        eqDiv.classList.add('active');
+                        eqDiv.querySelectorAll('.vertical').forEach(function(b) {
+                            var d = b.style.getPropertyValue('--duration') || '0.8s';
+                            b.style.animation = 'eq ' + d + ' ease infinite alternate-reverse';
+                        });
+                    });
+                    player.on('pause', function() {
+                        eqDiv.classList.remove('active');
+                        eqDiv.classList.add('idle');
+                        eqDiv.querySelectorAll('.vertical').forEach(function(b) {
+                            b.style.animation = 'eqIdle 2s ease infinite alternate-reverse';
+                        });
+                    });
+                });
             }
         }
 
-        // Auto-retry on error
-        html += 'var retryCount=0,maxRetries=5,retryTimer=null;';
-        html += 'var retryEl=document.getElementById("retry-overlay");';
-        html += 'var offlineEl=document.getElementById("offline-overlay");';
-        html += 'player.on("error",function(){';
-        html += '  if(retryCount<maxRetries){';
-        html += '    retryCount++;retryEl.classList.add("visible");';
-        html += '    retryTimer=setTimeout(function(){';
-        html += '      retryEl.classList.remove("visible");';
-        html += '      player.error(null);';
-        html += '      var src=player.currentSources();if(src&&src.length){player.src(src);player.play();}';
-        html += '    },5000);';
-        html += '  } else {';
-        html += '    retryEl.classList.remove("visible");';
-        html += '    offlineEl.classList.add("visible");';
-        html += '  }';
-        html += '});';
-        html += 'player.on("playing",function(){retryCount=0;retryEl.classList.remove("visible");offlineEl.classList.remove("visible");});';
+        // ─── Auto-retry on error ───
+        var retryCount = 0, maxRetries = 5;
+        var retryEl = document.getElementById('retry-overlay');
+        player.on('error', function() {
+            if (retryCount < maxRetries) {
+                retryCount++;
+                retryEl.classList.add('visible');
+                setTimeout(function() {
+                    retryEl.classList.remove('visible');
+                    player.error(null);
+                    var src = player.currentSources();
+                    if (src && src.length) { player.src(src); player.play(); }
+                }, 5000);
+            } else {
+                retryEl.classList.remove('visible');
+                offlineEl.classList.add('visible');
+            }
+        });
+        player.on('playing', function() {
+            retryCount = 0;
+            retryEl.classList.remove('visible');
+            offlineEl.classList.remove('visible');
+        });
 
-        // Quality selector
-        html += '(function(){';
-        html += 'if(!player.qualityLevels)return;var ql=player.qualityLevels();if(!ql)return;';
-        html += 'var btn=document.createElement("div");';
-        html += 'btn.className="vjs-control vjs-quality-btn";btn.setAttribute("role","button");btn.innerHTML="HD";';
-        html += 'var menu=document.createElement("div");menu.className="vjs-quality-menu";btn.appendChild(menu);';
-        html += 'btn.addEventListener("click",function(e){if(e.target.classList.contains("vjs-quality-item"))return;menu.classList.toggle("open")});';
-        html += 'document.addEventListener("click",function(e){if(!btn.contains(e.target))menu.classList.remove("open")});';
-        html += 'function buildMenu(){';
-        html += '  menu.innerHTML="";var levels=[];';
-        html += '  for(var i=0;i<ql.length;i++){levels.push({idx:i,h:ql[i].height||0,w:ql[i].width||0,bw:ql[i].bitrate||0,enabled:ql[i].enabled})}';
-        html += '  if(levels.length<2){btn.style.display="none";return}';
-        html += '  btn.style.display="";';
-        html += '  levels.sort(function(a,b){return b.h-a.h});';
-        html += '  var auto=document.createElement("button");auto.className="vjs-quality-item active";auto.textContent="Auto";';
-        html += '  auto.onclick=function(){for(var i=0;i<ql.length;i++)ql[i].enabled=true;updateActive(-1);menu.classList.remove("open")};';
-        html += '  menu.appendChild(auto);';
-        html += '  levels.forEach(function(l){';
-        html += '    var item=document.createElement("button");item.className="vjs-quality-item";';
-        html += '    item.textContent=l.h?l.h+"p":Math.round(l.bw/1000)+"k";';
-        html += '    item.onclick=function(){for(var i=0;i<ql.length;i++)ql[i].enabled=(i===l.idx);updateActive(l.idx);menu.classList.remove("open")};';
-        html += '    menu.appendChild(item);';
-        html += '  });';
-        html += '}';
-        html += 'function updateActive(idx){';
-        html += '  var items=menu.querySelectorAll(".vjs-quality-item");';
-        html += '  items.forEach(function(el,i){el.classList.toggle("active",idx===-1?i===0:i===0?false:false)});';
-        html += '  if(idx===-1){items[0].classList.add("active");btn.innerHTML="AUTO";btn.appendChild(menu);return}';
-        html += '  items.forEach(function(el,i){if(i>0)el.classList.toggle("active",el.textContent===ql[idx].height+"p")});';
-        html += '  btn.innerHTML=ql[idx].height?ql[idx].height+"p":"HD";btn.appendChild(menu);';
-        html += '}';
-        html += 'ql.on("addqualitylevel",function(){setTimeout(buildMenu,500)});';
-        html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(btn,fs.el());else cb.el().appendChild(btn)}';
-        html += '})();';
+        // ─── Quality selector ───
+        (function() {
+            if (!player.qualityLevels) return;
+            var ql = player.qualityLevels();
+            if (!ql) return;
+            var btn = document.createElement('div');
+            btn.className = 'vjs-control vjs-quality-btn';
+            btn.setAttribute('role', 'button');
+            btn.innerHTML = 'HD';
+            var menu = document.createElement('div');
+            menu.className = 'vjs-quality-menu';
+            btn.appendChild(menu);
+            btn.addEventListener('click', function(e) { if (e.target.classList.contains('vjs-quality-item')) return; menu.classList.toggle('open'); });
+            document.addEventListener('click', function(e) { if (!btn.contains(e.target)) menu.classList.remove('open'); });
+            function buildMenu() {
+                menu.innerHTML = '';
+                var levels = [];
+                for (var i = 0; i < ql.length; i++) { levels.push({ idx: i, h: ql[i].height || 0, w: ql[i].width || 0, bw: ql[i].bitrate || 0, enabled: ql[i].enabled }); }
+                if (levels.length < 2) { btn.style.display = 'none'; return; }
+                btn.style.display = '';
+                levels.sort(function(a, b) { return b.h - a.h; });
+                var auto = document.createElement('button');
+                auto.className = 'vjs-quality-item active';
+                auto.textContent = 'Auto';
+                auto.onclick = function() { for (var i = 0; i < ql.length; i++) ql[i].enabled = true; updateActive(-1); menu.classList.remove('open'); };
+                menu.appendChild(auto);
+                levels.forEach(function(l) {
+                    var item = document.createElement('button');
+                    item.className = 'vjs-quality-item';
+                    item.textContent = l.h ? l.h + 'p' : Math.round(l.bw / 1000) + 'k';
+                    item.onclick = function() { for (var i = 0; i < ql.length; i++) ql[i].enabled = (i === l.idx); updateActive(l.idx); menu.classList.remove('open'); };
+                    menu.appendChild(item);
+                });
+            }
+            function updateActive(idx) {
+                var items = menu.querySelectorAll('.vjs-quality-item');
+                items.forEach(function(el, i) { el.classList.toggle('active', idx === -1 ? i === 0 : false); });
+                if (idx === -1) { items[0].classList.add('active'); btn.innerHTML = 'AUTO'; btn.appendChild(menu); return; }
+                items.forEach(function(el, i) { if (i > 0) el.classList.toggle('active', el.textContent === ql[idx].height + 'p'); });
+                btn.innerHTML = ql[idx].height ? ql[idx].height + 'p' : 'HD';
+                btn.appendChild(menu);
+            }
+            ql.on('addqualitylevel', function() { setTimeout(buildMenu, 500); });
+            var cb = player.getChild('controlBar');
+            if (cb) { var fs = cb.getChild('fullscreenToggle'); if (fs) cb.el().insertBefore(btn, fs.el()); else cb.el().appendChild(btn); }
+        })();
 
-        // AirPlay button
+        // ─── AirPlay button ───
         if (config.behavior && config.behavior.airplay) {
-            html += '(function(){';
-            html += 'var vid=document.querySelector("video");if(!vid||!vid.webkitShowPlaybackTargetPicker)return;';
-            html += 'var apBtn=document.createElement("div");';
-            html += 'apBtn.className="vjs-control vjs-airplay-btn";apBtn.setAttribute("role","button");apBtn.title="AirPlay";';
-            html += 'apBtn.innerHTML=\'<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>\';';
-            html += 'apBtn.addEventListener("click",function(){vid.webkitShowPlaybackTargetPicker()});';
-            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(apBtn,fs.el());else cb.el().appendChild(apBtn)}';
-            html += '})();';
+            (function() {
+                var vid = document.querySelector('video');
+                if (!vid || !vid.webkitShowPlaybackTargetPicker) return;
+                var apBtn = document.createElement('div');
+                apBtn.className = 'vjs-control vjs-airplay-btn';
+                apBtn.setAttribute('role', 'button');
+                apBtn.title = 'AirPlay';
+                apBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>';
+                apBtn.addEventListener('click', function() { vid.webkitShowPlaybackTargetPicker(); });
+                var cb = player.getChild('controlBar');
+                if (cb) { var fs = cb.getChild('fullscreenToggle'); if (fs) cb.el().insertBefore(apBtn, fs.el()); else cb.el().appendChild(apBtn); }
+            })();
         }
 
-        // Chromecast button
+        // ─── Chromecast button ───
         if (config.behavior && config.behavior.chromecast) {
-            html += '(function(){';
-            html += 'var castBtn=document.createElement("div");';
-            html += 'castBtn.className="vjs-control vjs-cast-btn";castBtn.setAttribute("role","button");castBtn.title="Chromecast";castBtn.style.display="none";';
-            html += 'castBtn.innerHTML=\'<svg viewBox="0 0 24 24"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>\';';
-            html += 'var scr=document.createElement("script");scr.src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";document.head.appendChild(scr);';
-            html += 'window["__onGCastApiAvailable"]=function(isAvailable){';
-            html += '  if(!isAvailable)return;';
-            html += '  var ctx=cast.framework.CastContext.getInstance();';
-            html += '  ctx.setOptions({receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,autoJoinPolicy:chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED});';
-            html += '  castBtn.style.display="";';
-            html += '  castBtn.addEventListener("click",function(){ctx.requestSession().then(function(){';
-            html += '    var session=ctx.getCurrentSession();if(!session)return;';
-            html += '    var src=player.currentSrc();if(!src)return;';
-            html += '    var mi=new chrome.cast.media.MediaInfo(src,"application/x-mpegURL");';
-            html += '    var req=new chrome.cast.media.LoadRequest(mi);';
-            html += '    session.loadMedia(req);';
-            html += '  }).catch(function(e){console.log("Cast error:",e)})});';
-            html += '};';
-            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(castBtn,fs.el());else cb.el().appendChild(castBtn)}';
-            html += '})();';
+            (function() {
+                var castBtn = document.createElement('div');
+                castBtn.className = 'vjs-control vjs-cast-btn';
+                castBtn.setAttribute('role', 'button');
+                castBtn.title = 'Chromecast';
+                castBtn.style.display = 'none';
+                castBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>';
+                var scr = document.createElement('script');
+                scr.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+                document.head.appendChild(scr);
+                window['__onGCastApiAvailable'] = function(isAvailable) {
+                    if (!isAvailable) return;
+                    var ctx = cast.framework.CastContext.getInstance();
+                    ctx.setOptions({ receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID, autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
+                    castBtn.style.display = '';
+                    castBtn.addEventListener('click', function() {
+                        ctx.requestSession().then(function() {
+                            var session = ctx.getCurrentSession(); if (!session) return;
+                            var src = player.currentSrc(); if (!src) return;
+                            var mi = new chrome.cast.media.MediaInfo(src, 'application/x-mpegURL');
+                            var req = new chrome.cast.media.LoadRequest(mi);
+                            session.loadMedia(req);
+                        }).catch(function(e) { console.log('Cast error:', e); });
+                    });
+                };
+                var cb = player.getChild('controlBar');
+                if (cb) { var fs = cb.getChild('fullscreenToggle'); if (fs) cb.el().insertBefore(castBtn, fs.el()); else cb.el().appendChild(castBtn); }
+            })();
         }
 
-        // Multi-audio selector (same pattern as quality selector)
+        // ─── Multi-audio selector ───
         if (config.behavior && config.behavior.multiaudio) {
-            html += '(function(){';
-            html += 'var at=player.audioTracks();if(!at)return;';
-            html += 'function trackName(t,i){var n=resolveLang(t.language);if(n){var d=0,mi=0;for(var j=0;j<at.length;j++){if(at[j].language===t.language){if(j===i)mi=d;d++}}if(d>1)return n+" "+(mi+1);return n}var l=t.label||"";if(l&&!/^(stream|track|audio)[_\\s-]?\\d*$/i.test(l))return l;return "Audio "+(i+1)}';
-            html += 'var btn=document.createElement("div");';
-            html += 'btn.className="vjs-control vjs-audio-btn";btn.setAttribute("role","button");btn.title="Audio";';
-            html += 'btn.innerHTML=\'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\';';
-            html += 'var menu=document.createElement("div");menu.className="vjs-quality-menu";btn.appendChild(menu);';
-            html += 'btn.style.display="none";';
-            html += 'btn.addEventListener("click",function(e){if(e.target.closest&&e.target.closest(".vjs-quality-item"))return;menu.classList.toggle("open")});';
-            html += 'document.addEventListener("click",function(e){if(!btn.contains(e.target))menu.classList.remove("open")});';
-            html += 'function buildMenu(){';
-            html += '  menu.innerHTML="";if(at.length<2){btn.style.display="none";return}';
-            html += '  btn.style.display="";';
-            html += '  for(var i=0;i<at.length;i++){';
-            html += '    var item=document.createElement("button");item.className="vjs-quality-item"+(at[i].enabled?" active":"");';
-            html += '    item.textContent=trackName(at[i],i);';
-            html += '    (function(idx){item.onclick=function(){for(var j=0;j<at.length;j++)at[j].enabled=(j===idx);updActive();menu.classList.remove("open")}})(i);';
-            html += '    menu.appendChild(item);';
-            html += '  }';
-            html += '}';
-            html += 'function updActive(){';
-            html += '  var items=menu.querySelectorAll(".vjs-quality-item");';
-            html += '  for(var i=0;i<at.length&&i<items.length;i++)items[i].classList.toggle("active",at[i].enabled);';
-            html += '}';
-            html += 'at.addEventListener("addtrack",function(){setTimeout(buildMenu,500)});';
-            html += 'at.addEventListener("change",updActive);';
-            html += 'setTimeout(buildMenu,1000);';
-            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(btn,fs.el());else cb.el().appendChild(btn)}';
-            html += '})();';
+            (function() {
+                var at = player.audioTracks();
+                if (!at) return;
+                function trackName(t, i) {
+                    var n = resolveLang(t.language);
+                    if (n) {
+                        var d = 0, mi = 0;
+                        for (var j = 0; j < at.length; j++) { if (at[j].language === t.language) { if (j === i) mi = d; d++; } }
+                        if (d > 1) return n + ' ' + (mi + 1);
+                        return n;
+                    }
+                    var l = t.label || '';
+                    if (l && !/^(stream|track|audio)[_\s-]?\d*$/i.test(l)) return l;
+                    return 'Audio ' + (i + 1);
+                }
+                var btn = document.createElement('div');
+                btn.className = 'vjs-control vjs-audio-btn';
+                btn.setAttribute('role', 'button');
+                btn.title = 'Audio';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+                var menu = document.createElement('div');
+                menu.className = 'vjs-quality-menu';
+                btn.appendChild(menu);
+                btn.style.display = 'none';
+                btn.addEventListener('click', function(e) { if (e.target.closest && e.target.closest('.vjs-quality-item')) return; menu.classList.toggle('open'); });
+                document.addEventListener('click', function(e) { if (!btn.contains(e.target)) menu.classList.remove('open'); });
+                function buildMenu() {
+                    menu.innerHTML = '';
+                    if (at.length < 2) { btn.style.display = 'none'; return; }
+                    btn.style.display = '';
+                    for (var i = 0; i < at.length; i++) {
+                        var item = document.createElement('button');
+                        item.className = 'vjs-quality-item' + (at[i].enabled ? ' active' : '');
+                        item.textContent = trackName(at[i], i);
+                        (function(idx) { item.onclick = function() { for (var j = 0; j < at.length; j++) at[j].enabled = (j === idx); updActive(); menu.classList.remove('open'); }; })(i);
+                        menu.appendChild(item);
+                    }
+                }
+                function updActive() {
+                    var items = menu.querySelectorAll('.vjs-quality-item');
+                    for (var i = 0; i < at.length && i < items.length; i++) items[i].classList.toggle('active', at[i].enabled);
+                }
+                at.addEventListener('addtrack', function() { setTimeout(buildMenu, 500); });
+                at.addEventListener('change', updActive);
+                setTimeout(buildMenu, 1000);
+                var cb = player.getChild('controlBar');
+                if (cb) { var fs = cb.getChild('fullscreenToggle'); if (fs) cb.el().insertBefore(btn, fs.el()); else cb.el().appendChild(btn); }
+            })();
         }
 
-        // Watermark
+        // ─── Watermark ───
         if (config.watermark && config.watermark.enabled && config.watermark.text) {
-            html += 'var wm=document.createElement("div");wm.className="watermark-overlay";';
-            html += 'wm.style.opacity=' + (config.watermark.opacity || 0.15) + ';';
-            html += 'wm.textContent="' + config.watermark.text.replace(/"/g, '\\"').replace(/</g, '&lt;') + '";';
-            html += 'player.el().appendChild(wm);';
+            var wm = document.createElement('div');
+            wm.className = 'watermark-overlay';
+            wm.style.opacity = config.watermark.opacity || 0.15;
+            wm.textContent = config.watermark.text;
+            player.el().appendChild(wm);
         }
 
-        // EPG overlay (inside vjs container, fullscreen-safe)
+        // ─── EPG overlay (inside vjs container, fullscreen-safe) ───
         if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
-            html += '(function(){';
-            html += 'var schedule=' + JSON.stringify(config.epg.schedule) + ';';
-            html += 'var bar=document.createElement("div");bar.className="epg-bar";';
-            html += 'bar.innerHTML=\'<span class="epg-label">AHORA</span><span class="epg-now" id="epg-now"></span><span class="epg-sep">\\u00b7</span><span class="epg-label">SIGUIENTE</span><span class="epg-next" id="epg-next"></span>\';';
-            html += 'player.el().appendChild(bar);';
-            html += 'function pt(t){var p=t.split(":");return parseInt(p[0])*60+parseInt(p[1])}';
-            html += 'function upd(){';
-            html += '  var now=new Date(),day=now.getDay(),mins=now.getHours()*60+now.getMinutes();';
-            html += '  var today=schedule.filter(function(e){return e.day===day}).sort(function(a,b){return pt(a.time)-pt(b.time)});';
-            html += '  var cur=null,nxt=null;';
-            html += '  for(var i=0;i<today.length;i++){if(pt(today[i].time)<=mins){cur=today[i];nxt=today[i+1]||null}}';
-            html += '  var nowEl=document.getElementById("epg-now"),nxtEl=document.getElementById("epg-next");';
-            html += '  if(nowEl)nowEl.textContent=cur?cur.title:"Sin programaci\\u00f3n";';
-            html += '  if(nxtEl)nxtEl.textContent=nxt?nxt.title+" ("+nxt.time+")":"";';
-            html += '  var sep=bar.querySelector(".epg-sep"),labels=bar.querySelectorAll(".epg-label");';
-            html += '  if(!nxt){if(sep)sep.style.display="none";if(labels[1])labels[1].style.display="none";if(nxtEl)nxtEl.style.display="none"}';
-            html += '  else{if(sep)sep.style.display="";if(labels[1])labels[1].style.display="";if(nxtEl)nxtEl.style.display=""}';
-            html += '}';
-            html += 'upd();setInterval(upd,60000);';
-            html += '})();';
+            (function() {
+                var schedule = config.epg.schedule;
+                var bar = document.createElement('div');
+                bar.className = 'epg-bar';
+                bar.innerHTML = '<span class="epg-label">AHORA</span><span class="epg-now" id="epg-now"></span><span class="epg-sep">\u00b7</span><span class="epg-label">SIGUIENTE</span><span class="epg-next" id="epg-next"></span>';
+                player.el().appendChild(bar);
+                function pt(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+                function upd() {
+                    var now = new Date(), day = now.getDay(), mins = now.getHours() * 60 + now.getMinutes();
+                    var today = schedule.filter(function(e) { return e.day === day; }).sort(function(a, b) { return pt(a.time) - pt(b.time); });
+                    var cur = null, nxt = null;
+                    for (var i = 0; i < today.length; i++) { if (pt(today[i].time) <= mins) { cur = today[i]; nxt = today[i + 1] || null; } }
+                    var nowEl = document.getElementById('epg-now'), nxtEl = document.getElementById('epg-next');
+                    if (nowEl) nowEl.textContent = cur ? cur.title : 'Sin programación';
+                    if (nxtEl) nxtEl.textContent = nxt ? nxt.title + ' (' + nxt.time + ')' : '';
+                    var sep = bar.querySelector('.epg-sep'), labels = bar.querySelectorAll('.epg-label');
+                    if (!nxt) { if (sep) sep.style.display = 'none'; if (labels[1]) labels[1].style.display = 'none'; if (nxtEl) nxtEl.style.display = 'none'; }
+                    else { if (sep) sep.style.display = ''; if (labels[1]) labels[1].style.display = ''; if (nxtEl) nxtEl.style.display = ''; }
+                }
+                upd();
+                setInterval(upd, 60000);
+            })();
         }
 
-        // Analytics tracking — solo en producción (embed), no en preview del panel
-        html += '(function(){';
-        html += '  var ANALYTICS_URL="https://panel.ujjina.com/api/analytics";';
-        html += '  var uid="' + uid + '",pid="' + pid + '";';
-        html += '  if(!uid||!pid)return;';
-        html += '  var sid=Date.now().toString(36)+Math.random().toString(36).substr(2,8);';
-        html += '  var dur=0,bufCount=0,bufMs=0,errCount=0,ttff=0,quality="",ref="";';
-        html += '  var bufStart=0,playStart=0,sent={};';
-        html += '  try{ref=document.referrer||window.parent!==window?document.referrer:"direct"}catch(e){ref="iframe"}';
-        // Time to first frame
-        html += '  var loadStart=Date.now();';
-        html += '  player.one("playing",function(){ttff=Date.now()-loadStart});';
-        // Buffer tracking
-        html += '  player.on("waiting",function(){if(!bufStart)bufStart=Date.now()});';
-        html += '  player.on("playing",function(){if(bufStart){bufMs+=Date.now()-bufStart;bufCount++;bufStart=0}});';
-        // Error tracking
-        html += '  player.on("error",function(){errCount++});';
-        // Quality tracking
-        html += '  if(player.qualityLevels){var ql=player.qualityLevels();ql.on("change",function(){var active=ql[ql.selectedIndex];if(active&&active.height)quality=active.height+"p"})}';
-        // Send function
-        html += '  function send(type,extra){';
-        html += '    var data={uid:uid,pid:pid,sid:sid,t:type,d:Math.round(dur),buf:bufCount,bufMs:Math.round(bufMs),err:errCount,ttff:Math.round(ttff),q:quality,ref:ref};';
-        html += '    if(extra)for(var k in extra)data[k]=extra[k];';
-        html += '    try{navigator.sendBeacon(ANALYTICS_URL,JSON.stringify(data))}catch(e){try{fetch(ANALYTICS_URL,{method:"POST",body:JSON.stringify(data),keepalive:true,headers:{"Content-Type":"application/json"}})}catch(e2){}}';
-        html += '  }';
-        // Start event
-        html += '  send("start");';
-        // Duration counter
-        html += '  player.on("play",function(){playStart=Date.now()});';
-        html += '  player.on("pause",function(){if(playStart){dur+=(Date.now()-playStart)/1000;playStart=0}});';
-        // Heartbeat every 5 minutes (optimizado para free tier Firestore)
-        html += '  setInterval(function(){';
-        html += '    if(playStart){dur+=(Date.now()-playStart)/1000;playStart=Date.now()}';
-        html += '    send("heartbeat");';
-        html += '    bufCount=0;bufMs=0;errCount=0;';
-        html += '  },300000);';
-        // End event on page unload
-        html += '  window.addEventListener("beforeunload",function(){';
-        html += '    if(playStart){dur+=(Date.now()-playStart)/1000}';
-        html += '    send("end");';
-        html += '  });';
-        html += '})();';
-
-        html += '<\/script>';
-        if (vttText) {
-            html += '<script id="vtt-data" type="text/vtt">' + vttText.replace(/<\//g, '<\\/') + '<\/script>';
-        }
-        html += '</body></html>';
-
-        return html;
+        // ─── Analytics tracking (solo producción, no preview) ───
+        (function() {
+            var ANALYTICS_URL = 'https://panel.ujjina.com/api/analytics';
+            if (!uid || !pid) return;
+            var sid = Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
+            var dur = 0, bufCount = 0, bufMs = 0, errCount = 0, ttff = 0, quality = '', ref = '';
+            var bufStart = 0, playStart = 0;
+            try { ref = document.referrer || (window.parent !== window ? document.referrer : 'direct'); } catch (e) { ref = 'iframe'; }
+            var loadStart = Date.now();
+            player.one('playing', function() { ttff = Date.now() - loadStart; });
+            player.on('waiting', function() { if (!bufStart) bufStart = Date.now(); });
+            player.on('playing', function() { if (bufStart) { bufMs += Date.now() - bufStart; bufCount++; bufStart = 0; } });
+            player.on('error', function() { errCount++; });
+            if (player.qualityLevels) {
+                var ql = player.qualityLevels();
+                ql.on('change', function() { var active = ql[ql.selectedIndex]; if (active && active.height) quality = active.height + 'p'; });
+            }
+            function send(type, extra) {
+                var data = { uid: uid, pid: pid, sid: sid, t: type, d: Math.round(dur), buf: bufCount, bufMs: Math.round(bufMs), err: errCount, ttff: Math.round(ttff), q: quality, ref: ref };
+                if (extra) for (var k in extra) data[k] = extra[k];
+                try { navigator.sendBeacon(ANALYTICS_URL, JSON.stringify(data)); } catch (e) {
+                    try { fetch(ANALYTICS_URL, { method: 'POST', body: JSON.stringify(data), keepalive: true, headers: { 'Content-Type': 'application/json' } }); } catch (e2) {}
+                }
+            }
+            send('start');
+            player.on('play', function() { playStart = Date.now(); });
+            player.on('pause', function() { if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
+            setInterval(function() {
+                if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = Date.now(); }
+                send('heartbeat');
+                bufCount = 0; bufMs = 0; errCount = 0;
+            }, 300000);
+            window.addEventListener('beforeunload', function() {
+                if (playStart) { dur += (Date.now() - playStart) / 1000; }
+                send('end');
+            });
+        })();
     }
 })();
 </script>
