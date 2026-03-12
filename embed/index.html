@@ -298,8 +298,9 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
 
         // Fix generic track labels (audio + subtitles) from HLS manifests
         html += '(function(){';
-        html += 'var ln={en:"English",es:"Espa\\u00f1ol",fr:"Fran\\u00e7ais",de:"Deutsch",it:"Italiano",pt:"Portugu\\u00eas",ja:"\\u65e5\\u672c\\u8a9e",ko:"\\ud55c\\uad6d\\uc5b4",zh:"\\u4e2d\\u6587",ru:"\\u0420\\u0443\\u0441\\u0441\\u043a\\u0438\\u0439",ar:"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629",hi:"\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940",nl:"Nederlands",pl:"Polski",tr:"T\\u00fcrk\\u00e7e",sv:"Svenska"};';
-        html += 'function fix(t){var l=t.label||"";if(!l||/^(stream|track|audio|subtitle|text)[_\\s-]?\\d*$/i.test(l)){if(t.language&&ln[t.language])t.label=ln[t.language];else if(t.language)t.label=t.language.toUpperCase()}}';
+        html += 'var ln={en:"English",es:"Espa\\u00f1ol",fr:"Fran\\u00e7ais",de:"Deutsch",it:"Italiano",pt:"Portugu\\u00eas",ja:"\\u65e5\\u672c\\u8a9e",ko:"\\ud55c\\uad6d\\uc5b4",zh:"\\u4e2d\\u6587",ru:"\\u0420\\u0443\\u0441\\u0441\\u043a\\u0438\\u0439",ar:"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629",hi:"\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940",nl:"Nederlands",pl:"Polski",tr:"T\\u00fcrk\\u00e7e",sv:"Svenska",el:"\\u0395\\u03bb\\u03bb\\u03b7\\u03bd\\u03b9\\u03ba\\u03ac",th:"\\u0e44\\u0e17\\u0e22",vi:"Ti\\u1ebfng Vi\\u1ec7t",id:"Indonesia",ms:"Melayu",uk:"\\u0423\\u043a\\u0440\\u0430\\u0457\\u043d\\u0441\\u044c\\u043a\\u0430",cs:"\\u010ce\\u0161tina",ro:"Rom\\u00e2n\\u0103",hu:"Magyar",da:"Dansk",fi:"Suomi",nb:"Norsk",he:"\\u05e2\\u05d1\\u05e8\\u05d9\\u05ea"};';
+        html += 'function resolveLang(code){if(!code)return"";if(ln[code])return ln[code];var base=code.split("-")[0];if(ln[base])return ln[base];return code.toUpperCase()}';
+        html += 'function fix(t){var l=t.label||"";if(!l||/^(stream|track|audio|subtitle|text)[_\\s-]?\\d*$/i.test(l)){var n=resolveLang(t.language);if(n)t.label=n}}';
         html += 'function fixAll(list){for(var i=0;i<list.length;i++)fix(list[i]);list.addEventListener("addtrack",function(e){if(e.track)fix(e.track)})}';
         html += 'player.ready(function(){fixAll(player.audioTracks());fixAll(player.textTracks())});';
         html += '})();';
@@ -471,8 +472,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         if (config.behavior && config.behavior.multiaudio) {
             html += '(function(){';
             html += 'var at=player.audioTracks();if(!at)return;';
-            html += 'var langNames={en:"English",es:"Espa\\u00f1ol",fr:"Fran\\u00e7ais",de:"Deutsch",it:"Italiano",pt:"Portugu\\u00eas",ja:"\\u65e5\\u672c\\u8a9e",ko:"\\ud55c\\uad6d\\uc5b4",zh:"\\u4e2d\\u6587",ru:"\\u0420\\u0443\\u0441\\u0441\\u043a\\u0438\\u0439",ar:"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629",hi:"\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940",nl:"Nederlands",pl:"Polski",tr:"T\\u00fcrk\\u00e7e",sv:"Svenska"};';
-            html += 'function trackName(t,i){var l=t.label||"";if(l&&!/^(stream|track|audio)[_\\s-]?\\d*$/i.test(l))return l;if(t.language&&langNames[t.language])return langNames[t.language];if(t.language)return t.language.toUpperCase();return "Audio "+(i+1)}';
+            html += 'function trackName(t,i){var l=t.label||"";if(l&&!/^(stream|track|audio)[_\\s-]?\\d*$/i.test(l))return l;var n=resolveLang(t.language);if(n)return n;return "Audio "+(i+1)}';
             html += 'var btn=document.createElement("div");';
             html += 'btn.className="vjs-control vjs-audio-btn";btn.setAttribute("role","button");btn.title="Audio";';
             html += 'btn.innerHTML=\'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\';';
