@@ -463,6 +463,8 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         if (config.behavior && config.behavior.multiaudio) {
             html += '(function(){';
             html += 'var at=player.audioTracks();if(!at)return;';
+            html += 'var langNames={en:"English",es:"Espa\\u00f1ol",fr:"Fran\\u00e7ais",de:"Deutsch",it:"Italiano",pt:"Portugu\\u00eas",ja:"\\u65e5\\u672c\\u8a9e",ko:"\\ud55c\\uad6d\\uc5b4",zh:"\\u4e2d\\u6587",ru:"\\u0420\\u0443\\u0441\\u0441\\u043a\\u0438\\u0439",ar:"\\u0627\\u0644\\u0639\\u0631\\u0628\\u064a\\u0629",hi:"\\u0939\\u093f\\u0928\\u094d\\u0926\\u0940",nl:"Nederlands",pl:"Polski",tr:"T\\u00fcrk\\u00e7e",sv:"Svenska"};';
+            html += 'function trackName(t,i){var l=t.label||"";if(l&&!/^(stream|track|audio)[_\\s-]?\\d*$/i.test(l))return l;if(t.language&&langNames[t.language])return langNames[t.language];if(t.language)return t.language.toUpperCase();return "Audio "+(i+1)}';
             html += 'var btn=document.createElement("div");';
             html += 'btn.className="vjs-control vjs-audio-btn";btn.setAttribute("role","button");btn.title="Audio";';
             html += 'btn.innerHTML=\'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\';';
@@ -475,7 +477,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += '  btn.style.display="";';
             html += '  for(var i=0;i<at.length;i++){';
             html += '    var item=document.createElement("button");item.className="vjs-quality-item"+(at[i].enabled?" active":"");';
-            html += '    item.textContent=at[i].label||at[i].language||"Audio "+(i+1);';
+            html += '    item.textContent=trackName(at[i],i);';
             html += '    (function(idx){item.onclick=function(){for(var j=0;j<at.length;j++)at[j].enabled=(j===idx);updActive();menu.classList.remove("open")}})(i);';
             html += '    menu.appendChild(item);';
             html += '  }';
