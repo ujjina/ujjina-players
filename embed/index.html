@@ -229,9 +229,10 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         // Watermark CSS
         html += '@keyframes watermark-move{0%{top:10%;left:10%}25%{top:10%;left:70%}50%{top:70%;left:70%}75%{top:70%;left:10%}100%{top:10%;left:10%}}';
         html += '.watermark-overlay{position:absolute;z-index:35;pointer-events:none;font-family:Inter,sans-serif;font-weight:700;font-size:clamp(12px,2vmin,18px);color:#fff;white-space:nowrap;animation:watermark-move 30s linear infinite}';
-        // AirPlay / Chromecast button CSS
-        html += '.vjs-airplay-btn,.vjs-cast-btn{cursor:pointer;display:flex;align-items:center;justify-content:center;width:4em;height:100%;padding:0}';
+        // AirPlay / Chromecast / Audio button CSS
+        html += '.vjs-airplay-btn,.vjs-cast-btn,.vjs-audio-btn{cursor:pointer;display:flex;align-items:center;justify-content:center;width:4em;height:100%;padding:0;position:relative}';
         html += '.vjs-airplay-btn svg,.vjs-cast-btn svg{width:1.8em;height:auto;fill:currentColor}';
+        html += '.vjs-audio-btn svg{width:1.6em;height:1.6em}';
         // Password protection overlay CSS
         html += '#password-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);backdrop-filter:blur(12px)}';
         html += '#password-overlay.visible{display:flex}';
@@ -455,6 +456,38 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += '  }).catch(function(e){console.log("Cast error:",e)})});';
             html += '};';
             html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(castBtn,fs.el());else cb.el().appendChild(castBtn)}';
+            html += '})();';
+        }
+
+        // Multi-audio selector (same pattern as quality selector)
+        if (config.behavior && config.behavior.multiaudio) {
+            html += '(function(){';
+            html += 'var at=player.audioTracks();if(!at)return;';
+            html += 'var btn=document.createElement("div");';
+            html += 'btn.className="vjs-control vjs-audio-btn";btn.setAttribute("role","button");btn.title="Audio";';
+            html += 'btn.innerHTML=\'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\';';
+            html += 'var menu=document.createElement("div");menu.className="vjs-quality-menu";btn.appendChild(menu);';
+            html += 'btn.style.display="none";';
+            html += 'btn.addEventListener("click",function(e){if(e.target.closest&&e.target.closest(".vjs-quality-item"))return;menu.classList.toggle("open")});';
+            html += 'document.addEventListener("click",function(e){if(!btn.contains(e.target))menu.classList.remove("open")});';
+            html += 'function buildMenu(){';
+            html += '  menu.innerHTML="";if(at.length<2){btn.style.display="none";return}';
+            html += '  btn.style.display="";';
+            html += '  for(var i=0;i<at.length;i++){';
+            html += '    var item=document.createElement("button");item.className="vjs-quality-item"+(at[i].enabled?" active":"");';
+            html += '    item.textContent=at[i].label||at[i].language||"Audio "+(i+1);';
+            html += '    (function(idx){item.onclick=function(){for(var j=0;j<at.length;j++)at[j].enabled=(j===idx);updActive();menu.classList.remove("open")}})(i);';
+            html += '    menu.appendChild(item);';
+            html += '  }';
+            html += '}';
+            html += 'function updActive(){';
+            html += '  var items=menu.querySelectorAll(".vjs-quality-item");';
+            html += '  for(var i=0;i<at.length&&i<items.length;i++)items[i].classList.toggle("active",at[i].enabled);';
+            html += '}';
+            html += 'at.addEventListener("addtrack",function(){setTimeout(buildMenu,500)});';
+            html += 'at.addEventListener("change",updActive);';
+            html += 'setTimeout(buildMenu,1000);';
+            html += 'var cb=player.getChild("controlBar");if(cb){var fs=cb.getChild("fullscreenToggle");if(fs)cb.el().insertBefore(btn,fs.el());else cb.el().appendChild(btn)}';
             html += '})();';
         }
 
