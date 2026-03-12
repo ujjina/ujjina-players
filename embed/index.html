@@ -287,9 +287,7 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += '</div>';
         html += '<script src="https://vjs.zencdn.net/8.23.6/video.min.js"><\/script>';
         html += '<script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"><\/script>';
-        if (config.ads && config.ads.enabled && config.ads.vastUrl) {
-            html += '<script src="https://imasdk.googleapis.com/js/sdkloader/ima3.js"><\/script>';
-        }
+        // IMA SDK loaded dynamically below (NOT via document.write <script> tag — Chrome blocks cross-site parser-blocking scripts from document.write)
         html += '<script>';
         html += 'var player = videojs("vjs-player", {';
         html += 'controls: ' + (config.behavior ? config.behavior.controls !== false : true) + ',';
@@ -299,11 +297,18 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += 'sources: ' + (streamUrl ? '[{src:"' + streamUrl.replace(/"/g, '\\"') + '",type:"application/x-mpegURL"}]' : '[]');
         html += '});';
 
-        // Ad insertion (Google IMA SDK directly, no videojs plugins)
+        // Ad insertion — load IMA SDK dynamically to avoid document.write CORS block
         if (config.ads && config.ads.enabled && config.ads.vastUrl) {
             var escapedVastUrl = config.ads.vastUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var midrollCode = '';
+            if (config.ads.midroll) {
+                var midrollTime = config.ads.midrollTime || 300;
+                midrollCode = 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '"+Date.now())}});';
+            }
             html += '(function(){';
-            html += 'if(typeof google==="undefined"||!google.ima){console.warn("IMA SDK not loaded");return}';
+            html += 'var imaScript=document.createElement("script");';
+            html += 'imaScript.src="https://imasdk.googleapis.com/js/sdkloader/ima3.js";';
+            html += 'imaScript.onload=function(){';
             html += 'var adWrap=document.createElement("div");adWrap.id="ad-container";';
             html += 'adWrap.style.cssText="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;display:none;";';
             html += 'player.el().appendChild(adWrap);';
@@ -324,10 +329,10 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += 'adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,function(){adWrap.style.display="none";player.play()},false);';
             html += 'player.on("fullscreenchange",function(){if(adsManager&&adPlaying){var m=player.isFullscreen()?google.ima.ViewMode.FULLSCREEN:google.ima.ViewMode.NORMAL;adsManager.resize(player.currentWidth(),player.currentHeight(),m)}});';
             html += 'var _prerolled=false;player.on("play",function(){if(!_prerolled){_prerolled=true;player.pause();requestAd("' + escapedVastUrl + '"+Date.now())}});';
-            if (config.ads.midroll) {
-                var midrollTime = config.ads.midrollTime || 300;
-                html += 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '"+Date.now())}});';
-            }
+            html += midrollCode;
+            html += '};';  // end imaScript.onload
+            html += 'imaScript.onerror=function(){console.warn("IMA SDK failed to load")};';
+            html += 'document.head.appendChild(imaScript);';
             html += '})();';
         }
 
