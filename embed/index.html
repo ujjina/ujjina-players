@@ -281,10 +281,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             pwOverlay.classList.add('visible');
         }
 
+        // If ads enabled, disable autoplay (we'll handle it after the pre-roll)
+        var wantsAutoplay = config.behavior ? !!config.behavior.autoplay : false;
+        var hasAds = !!(config.ads && config.ads.enabled && config.ads.vastUrl);
+
         // Initialize Video.js player
         var player = videojs('vjs-player', {
             controls: config.behavior ? config.behavior.controls !== false : true,
-            autoplay: config.behavior ? !!config.behavior.autoplay : false,
+            autoplay: hasAds ? false : wantsAutoplay,
             liveui: config.behavior ? config.behavior.liveui !== false : true,
             fluid: false,
             sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
@@ -745,29 +749,27 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     })
                     .catch(function(e) { console.warn('VAST prefetch error:', e); });
 
-                // Intercept first play — ad video is already loaded, so play()
-                // executes within the user gesture and won't be blocked
+                // ── Intercept play or handle autoplay ──
                 var prerollDone = false;
-                player.one('play', function() {
+
+                function startPreroll(fromUserGesture) {
                     if (prerollDone) return;
                     prerollDone = true;
+                    player.pause();
+
                     if (prerollData && prerollReady) {
-                        // Ad is preloaded — play it NOW (within user gesture)
-                        player.pause();
                         showAd(prerollData, function() { player.play(); });
                     } else if (prerollData) {
-                        // VAST fetched but video not ready yet — wait briefly
-                        player.pause();
                         adLabel.textContent = 'Cargando anuncio...';
                         adOverlay.classList.add('visible');
                         var waitTimer = setInterval(function() {
                             if (prerollReady) {
                                 clearInterval(waitTimer);
                                 adOverlay.classList.remove('visible');
+                                adLabel.textContent = 'Anuncio';
                                 showAd(prerollData, function() { player.play(); });
                             }
                         }, 200);
-                        // Timeout: skip ad if not ready in 8s
                         setTimeout(function() {
                             if (!prerollReady) {
                                 clearInterval(waitTimer);
@@ -778,8 +780,50 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             }
                         }, 8000);
                     } else {
-                        // No ad available — play content normally
+                        // VAST not loaded yet — wait for it
+                        adLabel.textContent = 'Cargando anuncio...';
+                        adOverlay.classList.add('visible');
+                        var pollTimer = setInterval(function() {
+                            if (prerollData && prerollReady) {
+                                clearInterval(pollTimer);
+                                adOverlay.classList.remove('visible');
+                                adLabel.textContent = 'Anuncio';
+                                showAd(prerollData, function() { player.play(); });
+                            }
+                        }, 300);
+                        setTimeout(function() {
+                            clearInterval(pollTimer);
+                            adOverlay.classList.remove('visible');
+                            adLabel.textContent = 'Anuncio';
+                            player.controls(config.behavior ? config.behavior.controls !== false : true);
+                            player.play();
+                        }, 10000);
                     }
+                }
+
+                // If user had autoplay, start preroll automatically once VAST loads
+                if (wantsAutoplay) {
+                    // Wait for VAST to load, then start preroll (muted since no gesture)
+                    var autoplayCheck = setInterval(function() {
+                        if (prerollData) {
+                            clearInterval(autoplayCheck);
+                            adVideo.muted = true;
+                            startPreroll(false);
+                        }
+                    }, 300);
+                    // Timeout: if VAST doesn't load in 10s, just autoplay content
+                    setTimeout(function() {
+                        if (!prerollDone) {
+                            clearInterval(autoplayCheck);
+                            prerollDone = true;
+                            player.play();
+                        }
+                    }, 10000);
+                }
+
+                // Manual play: intercept first play event
+                player.one('play', function() {
+                    startPreroll(true);
                 });
 
                 // ── MID-ROLL: fetch + play after X minutes of watch time ──
