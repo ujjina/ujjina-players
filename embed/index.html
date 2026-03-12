@@ -323,10 +323,10 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += '},false);';
             html += 'adsLoader.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR,function(){adWrap.style.display="none";player.play()},false);';
             html += 'player.on("fullscreenchange",function(){if(adsManager&&adPlaying){var m=player.isFullscreen()?google.ima.ViewMode.FULLSCREEN:google.ima.ViewMode.NORMAL;adsManager.resize(player.currentWidth(),player.currentHeight(),m)}});';
-            html += 'var _prerolled=false;player.on("play",function(){if(!_prerolled){_prerolled=true;requestAd("' + escapedVastUrl + '")}});';
+            html += 'var _prerolled=false;player.on("play",function(){if(!_prerolled){_prerolled=true;player.pause();requestAd("' + escapedVastUrl + '"+Date.now())}});';
             if (config.ads.midroll) {
                 var midrollTime = config.ads.midrollTime || 300;
-                html += 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '")}});';
+                html += 'var _mf=false;player.on("timeupdate",function(){if(!_mf&&!adPlaying&&player.currentTime()>=' + midrollTime + '){_mf=true;requestAd("' + escapedVastUrl + '"+Date.now())}});';
             }
             html += '})();';
         }
