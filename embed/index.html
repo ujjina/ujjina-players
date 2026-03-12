@@ -301,8 +301,20 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += 'function resolveLang(code){if(!code)return"";if(_ln[code])return _ln[code];var base=code.split("-")[0];if(_ln[base])return _ln[base];return code.toUpperCase()}';
 
         // Fix generic track labels (audio + subtitles) from HLS manifests
+        // After fixing, force Video.js native menus to rebuild
         html += '(function(){';
-        html += 'function fix(t){var l=t.label||"";if(!l||/^(stream|track|audio|subtitle|text)[_\\s-]?\\d*$/i.test(l)){var n=resolveLang(t.language);if(n)t.label=n}}';
+        html += 'var _ut;function schedUpd(){clearTimeout(_ut);_ut=setTimeout(function(){';
+        html += 'var at=player.audioTracks(),ac={},i,lb;';
+        html += 'for(i=0;i<at.length;i++){lb=at[i].label;if(!ac[lb])ac[lb]=[];ac[lb].push(i)}';
+        html += 'for(lb in ac){if(ac[lb].length>1)for(i=0;i<ac[lb].length;i++)at[ac[lb][i]].label=lb+" "+(i+1)}';
+        html += 'var tt=player.textTracks(),tc={};';
+        html += 'for(i=0;i<tt.length;i++){if(tt[i].kind==="metadata")continue;lb=tt[i].label;if(!tc[lb])tc[lb]=[];tc[lb].push(i)}';
+        html += 'for(lb in tc){if(tc[lb].length>1)for(i=0;i<tc[lb].length;i++)tt[tc[lb][i]].label=lb+" "+(i+1)}';
+        html += 'var cb=player.controlBar;if(!cb)return;';
+        html += 'var ab=cb.getChild("audioTrackButton");if(ab)ab.update();';
+        html += 'var sb=cb.getChild("subsCapsButton");if(sb)sb.update();';
+        html += '},600)}';
+        html += 'function fix(t){var l=t.label||"";if(!l||/^(stream|track|audio|subtitle|text)[_\\s-]?\\d*$/i.test(l)){var n=resolveLang(t.language);if(n){t.label=n;schedUpd()}}}';
         html += 'function fixAll(list){for(var i=0;i<list.length;i++)fix(list[i]);list.addEventListener("addtrack",function(e){if(e.track)fix(e.track)})}';
         html += 'player.ready(function(){fixAll(player.audioTracks());fixAll(player.textTracks())});';
         html += '})();';
