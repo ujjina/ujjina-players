@@ -246,6 +246,16 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
         html += '#password-overlay .pw-btn:hover{opacity:0.9}';
         html += '#password-overlay .pw-error-msg{color:#ef4444;font-family:Inter,sans-serif;font-size:13px;min-height:18px}';
         html += '@keyframes pw-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}';
+        // EPG bar CSS
+        if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
+            var epgPos = config.epg.position || 'top';
+            html += '.epg-bar{position:absolute;' + (epgPos === 'top' ? 'top:0' : 'bottom:3em') + ';left:0;width:100%;z-index:25;display:flex;align-items:center;padding:8px 16px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:Inter,sans-serif;color:#fff;gap:12px;opacity:0;transition:opacity 0.3s;pointer-events:none;box-sizing:border-box}';
+            html += '.vjs-user-active .epg-bar,.vjs-paused .epg-bar{opacity:1}';
+            html += '.epg-label{text-transform:uppercase;font-size:clamp(8px,1.4vmin,10px);letter-spacing:1px;opacity:0.5;flex-shrink:0}';
+            html += '.epg-now{font-weight:700;font-size:clamp(11px,2vmin,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+            html += '.epg-sep{opacity:0.3;flex-shrink:0}';
+            html += '.epg-next{font-weight:400;font-size:clamp(10px,1.8vmin,13px);opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+        }
         html += eqCss;
         html += dynamicCss;
         html += '</style>';
@@ -454,6 +464,30 @@ html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#
             html += 'wm.style.opacity=' + (config.watermark.opacity || 0.15) + ';';
             html += 'wm.textContent="' + config.watermark.text.replace(/"/g, '\\"').replace(/</g, '&lt;') + '";';
             html += 'player.el().appendChild(wm);';
+        }
+
+        // EPG overlay (inside vjs container, fullscreen-safe)
+        if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
+            html += '(function(){';
+            html += 'var schedule=' + JSON.stringify(config.epg.schedule) + ';';
+            html += 'var bar=document.createElement("div");bar.className="epg-bar";';
+            html += 'bar.innerHTML=\'<span class="epg-label">AHORA</span><span class="epg-now" id="epg-now"></span><span class="epg-sep">\\u00b7</span><span class="epg-label">SIGUIENTE</span><span class="epg-next" id="epg-next"></span>\';';
+            html += 'player.el().appendChild(bar);';
+            html += 'function pt(t){var p=t.split(":");return parseInt(p[0])*60+parseInt(p[1])}';
+            html += 'function upd(){';
+            html += '  var now=new Date(),day=now.getDay(),mins=now.getHours()*60+now.getMinutes();';
+            html += '  var today=schedule.filter(function(e){return e.day===day}).sort(function(a,b){return pt(a.time)-pt(b.time)});';
+            html += '  var cur=null,nxt=null;';
+            html += '  for(var i=0;i<today.length;i++){if(pt(today[i].time)<=mins){cur=today[i];nxt=today[i+1]||null}}';
+            html += '  var nowEl=document.getElementById("epg-now"),nxtEl=document.getElementById("epg-next");';
+            html += '  if(nowEl)nowEl.textContent=cur?cur.title:"Sin programaci\\u00f3n";';
+            html += '  if(nxtEl)nxtEl.textContent=nxt?nxt.title+" ("+nxt.time+")":"";';
+            html += '  var sep=bar.querySelector(".epg-sep"),labels=bar.querySelectorAll(".epg-label");';
+            html += '  if(!nxt){if(sep)sep.style.display="none";if(labels[1])labels[1].style.display="none";if(nxtEl)nxtEl.style.display="none"}';
+            html += '  else{if(sep)sep.style.display="";if(labels[1])labels[1].style.display="";if(nxtEl)nxtEl.style.display=""}';
+            html += '}';
+            html += 'upd();setInterval(upd,60000);';
+            html += '})();';
         }
 
         // Analytics tracking — solo en producción (embed), no en preview del panel
