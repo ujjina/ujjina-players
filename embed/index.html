@@ -432,17 +432,30 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
         }
 
-        // ─── Auto-retry on error ───
+        // ─── Auto-retry on error (re-resolves JSON stream URL on each retry) ───
         var retryCount = 0, maxRetries = 5;
         var retryEl = document.getElementById('retry-overlay');
+        async function resolveStreamForRetry() {
+            if (config.stream && config.stream.method !== 'direct' && config.stream.jsonUrl && config.stream.jsonPath) {
+                try {
+                    var resp = await fetch(config.stream.jsonUrl);
+                    var data = await resp.json();
+                    var parts = config.stream.jsonPath.split('.');
+                    var value = data;
+                    for (var i = 0; i < parts.length; i++) { if (value == null) break; value = value[parts[i]]; }
+                    if (value) return [{ src: value, type: 'application/x-mpegURL' }];
+                } catch (e) {}
+            }
+            return player.currentSources();
+        }
         player.on('error', function() {
             if (retryCount < maxRetries) {
                 retryCount++;
                 retryEl.classList.add('visible');
-                setTimeout(function() {
+                setTimeout(async function() {
                     retryEl.classList.remove('visible');
                     player.error(null);
-                    var src = player.currentSources();
+                    var src = await resolveStreamForRetry();
                     if (src && src.length) { player.src(src); player.play(); }
                 }, 5000);
             } else {
@@ -468,7 +481,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var menu = document.createElement('div');
             menu.className = 'vjs-quality-menu';
             btn.appendChild(menu);
-            btn.addEventListener('click', function(e) { if (e.target.classList.contains('vjs-quality-item')) return; menu.classList.toggle('open'); });
+            btn.addEventListener('click', function(e) { if (e.target.closest && e.target.closest('.vjs-quality-item')) return; menu.classList.toggle('open'); });
             document.addEventListener('click', function(e) { if (!btn.contains(e.target)) menu.classList.remove('open'); });
             function buildMenu() {
                 menu.innerHTML = '';
