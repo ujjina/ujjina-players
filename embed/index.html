@@ -24,6 +24,18 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 #offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}
 #offline-overlay .offline-retry-btn{margin-top:16px;padding:10px 28px;border:2px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,16px);font-weight:600;cursor:pointer;transition:background 0.2s,border-color 0.2s}
 #offline-overlay .offline-retry-btn:hover{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.5)}
+#offair-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:38;display:none;flex-direction:column;justify-content:flex-end;background-size:cover;background-position:center;background-color:transparent}
+#offair-overlay.visible{display:flex}
+#offair-overlay .offair-bar{display:flex;align-items:center;gap:10px;padding:10px 20px;background:linear-gradient(0deg,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0) 100%);min-height:48px}
+#offair-overlay .offair-dot{width:10px;height:10px;border-radius:50%;background:#666;flex-shrink:0}
+#offair-overlay .offair-text{color:rgba(255,255,255,0.85);font-family:Inter,sans-serif;font-size:clamp(12px,2.2vmin,16px);font-weight:500}
+#offair-overlay .offair-schedule{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(11px,1.8vmin,14px);margin-left:auto}
+#offair-overlay .offair-play-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.3s,border-color 0.3s;backdrop-filter:blur(4px)}
+#offair-overlay .offair-play-btn:hover{background:rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.5)}
+#offair-overlay .offair-play-btn svg{width:24px;height:24px;fill:rgba(255,255,255,0.7);margin-left:3px}
+#offair-overlay .offair-play-btn.checking{pointer-events:none}
+#offair-overlay .offair-play-btn.checking svg{display:none}
+#offair-overlay .offair-play-btn.checking::after{content:'';width:24px;height:24px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite}
 #retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}
 #retry-overlay.visible{display:flex}
 #retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -75,7 +87,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
 <div id="player">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
-    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Sin señal disponible</div><button class="offline-retry-btn" id="offline-retry-btn">Reintentar</button></div>
+    <div id="offair-overlay"><div class="offair-play-btn" id="offair-play-btn"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div><div class="offair-bar"><div class="offair-dot"></div><span class="offair-text" id="offair-text">Fuera de emisión</span><span class="offair-schedule" id="offair-schedule"></span></div></div>
+    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Reconectando...</div><button class="offline-retry-btn" id="offline-retry-btn">Reintentar</button></div>
     <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
     <div id="ad-overlay"><video id="ad-video" playsinline></video><div class="ad-label" id="ad-label">Anuncio</div><div class="ad-click" id="ad-click"></div><div class="ad-skip disabled" id="ad-skip">Omitir en...</div></div>
     <div id="password-overlay"><div class="pw-box">
@@ -142,20 +155,20 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         return 'application/x-mpegURL';
     }
 
-    async function resolveAndRender(config) {
-        // Resolve stream URL
-        var streamUrl = '';
-        if (config.stream) {
-            if (config.stream.method === 'direct') {
-                streamUrl = config.stream.url || '';
-            } else if (config.stream.jsonUrl && config.stream.jsonPath) {
-                try {
-                    var jCtrl = new AbortController();
-                    var jTimeout = setTimeout(function() { jCtrl.abort(); }, 10000);
-                    var resp = await fetch(config.stream.jsonUrl, { signal: jCtrl.signal });
+    // Resolve stream URL from config (used by initial load + retries)
+    function resolveStreamUrl(config) {
+        if (!config.stream) return Promise.resolve('');
+        if (config.stream.method === 'direct') return Promise.resolve(config.stream.url || '');
+        if (config.stream.jsonUrl && config.stream.jsonPath) {
+            var jCtrl = new AbortController();
+            var jTimeout = setTimeout(function() { jCtrl.abort(); }, 10000);
+            return fetch(config.stream.jsonUrl, { signal: jCtrl.signal })
+                .then(function(resp) {
                     clearTimeout(jTimeout);
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                    var data = await resp.json();
+                    return resp.json();
+                })
+                .then(function(data) {
                     var parts = config.stream.jsonPath.split('.');
                     var DENY = ['__proto__', 'constructor', 'prototype'];
                     var value = data;
@@ -163,12 +176,34 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         if (value == null || DENY.indexOf(parts[i]) !== -1) { value = null; break; }
                         value = value[parts[i]];
                     }
-                    streamUrl = value || '';
-                } catch (e) {
-                    console.warn('Error resolving JSON stream:', e);
-                }
-            }
+                    return value || '';
+                })
+                .catch(function(e) { clearTimeout(jTimeout); console.warn('Error resolving JSON stream:', e); return ''; });
         }
+        return Promise.resolve('');
+    }
+
+    // Quick probe: check if stream URL is reachable (<3s)
+    function probeStream(url) {
+        if (!url) return Promise.resolve(false);
+        var ctrl = new AbortController();
+        var t = setTimeout(function() { ctrl.abort(); }, 3000);
+        return fetch(url, { method: 'HEAD', mode: 'cors', signal: ctrl.signal })
+            .then(function(r) { clearTimeout(t); return r.ok; })
+            .catch(function() {
+                clearTimeout(t);
+                // HEAD may fail due to CORS — try GET with range header as fallback
+                var ctrl2 = new AbortController();
+                var t2 = setTimeout(function() { ctrl2.abort(); }, 3000);
+                return fetch(url, { mode: 'cors', signal: ctrl2.signal, headers: { 'Range': 'bytes=0-0' } })
+                    .then(function(r) { clearTimeout(t2); return r.ok || r.status === 206; })
+                    .catch(function() { clearTimeout(t2); return false; });
+            });
+    }
+
+    async function resolveAndRender(config) {
+        // Resolve stream URL
+        var streamUrl = await resolveStreamUrl(config);
 
         // Download VTT via proxy if subtitles configured
         var vttText = null;
@@ -184,8 +219,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
         }
 
-        // Render player via DOM manipulation (NO document.write)
-        renderPlayer(config, streamUrl, vttText);
+        // Probe stream availability BEFORE handing to Video.js
+        var streamLive = false;
+        if (streamUrl) {
+            streamLive = await probeStream(streamUrl);
+        }
+
+        // Render player (always — sets up poster, logo, controls etc.)
+        renderPlayer(config, streamLive ? streamUrl : '', vttText, !streamLive);
     }
 
     function showError(msg) {
@@ -288,7 +329,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         return css;
     }
 
-    function renderPlayer(config, streamUrl, vttText) {
+    function renderPlayer(config, streamUrl, vttText, isOffair) {
         // Hide loading, show player container
         document.getElementById('loading').style.display = 'none';
         document.getElementById('player').style.display = 'block';
@@ -302,15 +343,51 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             videoEl.setAttribute('poster', config.poster.image);
         }
 
-        // Offline overlay config (preload image so it's ready when needed)
+        // Background image on player container (visible behind poster/player)
+        var playerDiv = document.getElementById('player');
+        if (config.background && config.background.image) {
+            playerDiv.style.backgroundImage = "url('" + config.background.image.replace(/'/g, "\\'") + "')";
+        }
+
+        // Offline overlay config (for interrupted streams — "Reconectando...")
         var offlineEl = document.getElementById('offline-overlay');
         var offlineMsgEl = document.getElementById('offline-msg');
         if (config.offline && config.offline.image) {
             var offImg = new Image(); offImg.src = config.offline.image;
             offlineEl.style.backgroundImage = "url('" + config.offline.image.replace(/'/g, "\\'") + "')";
         }
+
+        // Off-air overlay config (for channels not currently broadcasting)
+        var offairEl = document.getElementById('offair-overlay');
+        var offairTextEl = document.getElementById('offair-text');
+        var offairScheduleEl = document.getElementById('offair-schedule');
+        var offairPlayBtn = document.getElementById('offair-play-btn');
+
+        // Use offline image/message for off-air state too (configured by user)
+        if (config.offline && config.offline.image) {
+            offairEl.style.backgroundImage = "url('" + config.offline.image.replace(/'/g, "\\'") + "')";
+        } else if (config.poster && config.poster.image) {
+            offairEl.style.backgroundImage = "url('" + config.poster.image.replace(/'/g, "\\'") + "')";
+        }
         if (config.offline && config.offline.message) {
-            offlineMsgEl.textContent = config.offline.message;
+            offairTextEl.textContent = config.offline.message;
+        }
+        // Show next scheduled program from EPG if available
+        if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
+            var now = new Date();
+            var nowMins = now.getHours() * 60 + now.getMinutes();
+            var nextShow = null;
+            for (var si = 0; si < config.epg.schedule.length; si++) {
+                var sh = config.epg.schedule[si];
+                if (sh.start) {
+                    var sp = sh.start.split(':');
+                    var startMins = parseInt(sp[0]) * 60 + parseInt(sp[1] || 0);
+                    if (startMins > nowMins && !nextShow) nextShow = sh;
+                }
+            }
+            if (nextShow) {
+                offairScheduleEl.textContent = 'Próxima emisión: ' + (nextShow.title || '') + ' ' + (nextShow.start || '');
+            }
         }
 
         // Password overlay — hide if not needed
@@ -329,11 +406,62 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // Initialize Video.js player
         var player = videojs('vjs-player', {
             controls: config.behavior ? config.behavior.controls !== false : true,
-            autoplay: (hasAds || hasProtection) ? false : wantsAutoplay,
+            autoplay: (hasAds || hasProtection || isOffair) ? false : wantsAutoplay,
             liveui: config.behavior ? config.behavior.liveui !== false : true,
             fluid: false,
             sources: streamUrl ? [{ src: streamUrl, type: detectMime(streamUrl) }] : []
         });
+
+        // ─── OFF-AIR STATE: stream not available on first visit ───
+        var hasEverPlayed = false;
+        var offairPollTimer = null;
+        player.on('playing', function() { hasEverPlayed = true; });
+
+        // Off-air play button: single attempt when clicked
+        offairPlayBtn.addEventListener('click', function() {
+            if (offairPlayBtn.classList.contains('checking')) return;
+            offairPlayBtn.classList.add('checking');
+            resolveStreamUrl(config).then(function(url) {
+                if (!url) { offairPlayBtn.classList.remove('checking'); return; }
+                return probeStream(url).then(function(live) {
+                    offairPlayBtn.classList.remove('checking');
+                    if (live) {
+                        offairEl.classList.remove('visible');
+                        player.controls(config.behavior ? config.behavior.controls !== false : true);
+                        player.src([{ src: url, type: detectMime(url) }]);
+                        player.play();
+                        if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
+                    }
+                });
+            }).catch(function() { offairPlayBtn.classList.remove('checking'); });
+        });
+
+        // Silent background polling every 45-60s (randomized) — reusable from error handler too
+        function startOffairPoll() {
+            if (offairPollTimer) return;
+            offairPollTimer = setInterval(function() {
+                if (document.hidden) return;
+                resolveStreamUrl(config).then(function(url) {
+                    if (!url) return;
+                    probeStream(url).then(function(live) {
+                        if (live && offairEl.classList.contains('visible')) {
+                            offairEl.classList.remove('visible');
+                            player.controls(config.behavior ? config.behavior.controls !== false : true);
+                            player.src([{ src: url, type: detectMime(url) }]);
+                            player.play();
+                            if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
+                        }
+                    });
+                });
+            }, 45000 + Math.random() * 15000);
+        }
+
+        if (isOffair) {
+            // Show off-air overlay immediately — no spinner, no retries
+            offairEl.classList.add('visible');
+            player.controls(false);
+            startOffairPoll();
+        }
 
         // ─── Track label fix (audio + subtitles from HLS manifests) ───
         (function() {
@@ -498,8 +626,18 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // Unified error handler (single listener prevents overlapping retry logic)
         var offlineRetryBtn = document.getElementById('offline-retry-btn');
         var offlineRecheckTimer = null;
-        function attemptOfflineRecovery() {
+
+        function showOffairState() {
             offlineEl.classList.remove('visible');
+            retryEl.classList.remove('visible');
+            offairEl.classList.add('visible');
+            player.controls(false);
+            if (!offairPollTimer) startOffairPoll();
+        }
+
+        function attemptRecovery() {
+            offlineEl.classList.remove('visible');
+            offairEl.classList.remove('visible');
             retryEl.classList.add('visible');
             player.error(null);
             resolveStreamForRetry().then(function(src) {
@@ -509,40 +647,44 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     player.src(src);
                     player.play();
                 } else {
-                    offlineEl.classList.add('visible');
+                    showOffairState();
                 }
             }).catch(function() {
                 retryEl.classList.remove('visible');
-                offlineEl.classList.add('visible');
+                showOffairState();
             });
         }
-        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
+        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptRecovery);
         player.on('error', function() {
+            if (!hasEverPlayed && !streamUrl) {
+                // Never had a stream — go straight to off-air (no retries)
+                showOffairState();
+                return;
+            }
             if (retryCount < maxRetries) {
                 retryCount++;
+                offlineMsgEl.textContent = 'Reconectando... (' + retryCount + '/' + maxRetries + ')';
                 retryEl.classList.add('visible');
                 setTimeout(async function() {
                     retryEl.classList.remove('visible');
                     player.error(null);
                     var src = await resolveStreamForRetry();
                     if (src && src.length) { player.src(src); player.play(); }
+                    else { showOffairState(); }
                 }, 5000);
             } else {
-                retryEl.classList.remove('visible');
-                offlineEl.classList.add('visible');
-                if (!offlineRecheckTimer) {
-                    offlineRecheckTimer = setInterval(function() {
-                        if (!offlineEl.classList.contains('visible')) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; return; }
-                        attemptOfflineRecovery();
-                    }, 30000);
-                }
+                // All retries exhausted — show off-air state (not ugly error)
+                showOffairState();
             }
         });
         player.on('playing', function() {
             retryCount = 0;
             retryEl.classList.remove('visible');
             offlineEl.classList.remove('visible');
+            offairEl.classList.remove('visible');
+            player.controls(config.behavior ? config.behavior.controls !== false : true);
             if (offlineRecheckTimer) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; }
+            if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
         });
 
         // Stall watchdog: if 'waiting' persists 30s without 'playing', trigger retry
