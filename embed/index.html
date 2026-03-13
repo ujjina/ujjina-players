@@ -295,14 +295,15 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             pwOverlay.classList.add('visible');
         }
 
-        // If ads enabled, disable autoplay (we'll handle it after the pre-roll)
+        // Disable autoplay when ads or password protection are active
         var wantsAutoplay = config.behavior ? !!config.behavior.autoplay : false;
         var hasAds = !!(config.ads && config.ads.enabled && config.ads.vastUrl);
+        var hasProtection = !!(config.protection && config.protection.enabled && config.protection.password);
 
         // Initialize Video.js player
         var player = videojs('vjs-player', {
             controls: config.behavior ? config.behavior.controls !== false : true,
-            autoplay: hasAds ? false : wantsAutoplay,
+            autoplay: (hasAds || hasProtection) ? false : wantsAutoplay,
             liveui: config.behavior ? config.behavior.liveui !== false : true,
             fluid: false,
             sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
@@ -350,6 +351,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 if (pwInput.value === correctPw) {
                     pwOverlay.classList.remove('visible');
                     player.el().style.visibility = 'visible';
+                    if (wantsAutoplay) player.play();
                 } else {
                     pwError.textContent = 'Contraseña incorrecta';
                     pwInput.classList.add('error');
@@ -824,8 +826,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     }
                 }
 
-                // If user had autoplay, start preroll automatically once VAST loads
-                if (wantsAutoplay) {
+                // If user had autoplay (and no password protection), start preroll automatically once VAST loads
+                if (wantsAutoplay && !hasProtection) {
                     // Wait for VAST to load, then start preroll (muted since no gesture)
                     var autoplayCheck = setInterval(function() {
                         if (prerollData) {
