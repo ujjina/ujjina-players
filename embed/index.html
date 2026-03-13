@@ -135,7 +135,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
     function detectMime(url) {
         if (!url) return 'application/x-mpegURL';
         var u = url.split('?')[0].toLowerCase();
-        if (u.match(/\.mpd$/)) return 'application/dash+xml';
+        // No DASH (.mpd) — Video.js 8 needs videojs-contrib-dash plugin not loaded
         if (u.match(/\.mp4$/)) return 'video/mp4';
         if (u.match(/\.webm$/)) return 'video/webm';
         if (u.match(/\.mp3$/)) return 'audio/mpeg';
@@ -197,6 +197,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
     function hexToRgba(hex, alpha) {
         if (!hex) return 'rgba(0,0,0,' + alpha + ')';
         hex = hex.replace('#', '');
+        if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
         var r = parseInt(hex.substring(0, 2), 16) || 0;
         var g = parseInt(hex.substring(2, 4), 16) || 0;
         var b = parseInt(hex.substring(4, 6), 16) || 0;
@@ -494,6 +495,28 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
             return player.currentSources();
         }
+        // Unified error handler (single listener prevents overlapping retry logic)
+        var offlineRetryBtn = document.getElementById('offline-retry-btn');
+        var offlineRecheckTimer = null;
+        function attemptOfflineRecovery() {
+            offlineEl.classList.remove('visible');
+            retryEl.classList.add('visible');
+            player.error(null);
+            resolveStreamForRetry().then(function(src) {
+                retryEl.classList.remove('visible');
+                if (src && src.length) {
+                    retryCount = 0;
+                    player.src(src);
+                    player.play();
+                } else {
+                    offlineEl.classList.add('visible');
+                }
+            }).catch(function() {
+                retryEl.classList.remove('visible');
+                offlineEl.classList.add('visible');
+            });
+        }
+        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
         player.on('error', function() {
             if (retryCount < maxRetries) {
                 retryCount++;
@@ -507,44 +530,34 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             } else {
                 retryEl.classList.remove('visible');
                 offlineEl.classList.add('visible');
+                if (!offlineRecheckTimer) {
+                    offlineRecheckTimer = setInterval(function() {
+                        if (!offlineEl.classList.contains('visible')) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; return; }
+                        attemptOfflineRecovery();
+                    }, 30000);
+                }
             }
         });
         player.on('playing', function() {
             retryCount = 0;
             retryEl.classList.remove('visible');
             offlineEl.classList.remove('visible');
+            if (offlineRecheckTimer) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; }
         });
-        // Offline recovery: retry button + periodic recheck every 30s
-        var offlineRetryBtn = document.getElementById('offline-retry-btn');
-        var offlineRecheckTimer = null;
-        function attemptOfflineRecovery() {
-            offlineEl.classList.remove('visible');
-            retryEl.classList.add('visible');
-            player.error(null);
-            resolveStreamForRetry().then(function(src) {
-                retryEl.classList.remove('visible');
-                if (src && src.length) {
-                    retryCount = maxRetries - 1;
-                    player.src(src);
-                    player.play();
-                } else {
-                    offlineEl.classList.add('visible');
+
+        // Stall watchdog: if 'waiting' persists 30s without 'playing', trigger retry
+        var stallTimer = null;
+        player.on('waiting', function() {
+            if (stallTimer) return;
+            stallTimer = setTimeout(function() {
+                stallTimer = null;
+                if (!player.paused() && !player.ended()) {
+                    player.error({ code: 4, message: 'Stream stalled' });
                 }
-            }).catch(function() {
-                retryEl.classList.remove('visible');
-                offlineEl.classList.add('visible');
-            });
-        }
-        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
-        player.on('error', function() {
-            if (retryCount >= maxRetries && !offlineRecheckTimer) {
-                offlineRecheckTimer = setInterval(function() {
-                    if (!offlineEl.classList.contains('visible')) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; return; }
-                    attemptOfflineRecovery();
-                }, 30000);
-            }
+            }, 30000);
         });
-        player.on('playing', function() { if (offlineRecheckTimer) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; } });
+        player.on('playing', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
+        player.on('pause', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
 
         // ─── Quality selector ───
         (function() {
@@ -945,7 +958,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     startPreroll(true);
                 });
 
-                // ── MID-ROLL: fetch + play after X minutes of watch time ──
+                // ── MID-ROLL: fetch + play after X minutes of watch time (recurring for 24/7) ──
                 if (midroll && midrollTime > 0) {
                     var watchedTime = 0, watchStart = 0;
                     player.on('play', function() { if (!watchStart) watchStart = Date.now(); });
@@ -955,25 +968,40 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         var total = watchedTime + (watchStart ? (Date.now() - watchStart) / 1000 : 0);
                         if (total >= midrollTime) {
                             midrollFired = true;
-                            // For mid-roll, user has already interacted, so muted autoplay works
+                            // User already interacted — no need to mute
                             fetch(PROXY + encodeURIComponent(vastUrl))
                                 .then(function(r) { return r.text(); })
                                 .then(function(xml) {
                                     var data = parseVAST(xml);
                                     if (data && data.mediaUrl) {
                                         adVideo.src = data.mediaUrl;
-                                        adVideo.muted = true;
                                         adVideo.load();
                                         var midrollShown = false;
                                         adVideo.addEventListener('canplay', function() {
                                             if (midrollShown) return;
                                             midrollShown = true;
-                                            showAd(data, function() { safePlay(); });
+                                            showAd(data, function() {
+                                                // Reset for next mid-roll (recurring for 24/7 streams)
+                                                watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                                safePlay();
+                                            });
                                         }, { once: true });
-                                        setTimeout(function() { if (!midrollShown) { midrollShown = true; } }, 8000);
+                                        setTimeout(function() {
+                                            if (!midrollShown) {
+                                                midrollShown = true;
+                                                // Ad failed to load — reset for next cycle
+                                                watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                            }
+                                        }, 8000);
+                                    } else {
+                                        // No valid VAST — reset for next cycle
+                                        watchedTime = 0; watchStart = Date.now(); midrollFired = false;
                                     }
                                 })
-                                .catch(function() {});
+                                .catch(function() {
+                                    // Fetch failed — reset for next cycle
+                                    watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                });
                         }
                     });
                 }
@@ -992,7 +1020,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             player.one('playing', function() { ttff = Date.now() - loadStart; });
             player.on('waiting', function() { if (!bufStart) bufStart = Date.now(); });
             player.on('playing', function() { if (bufStart) { bufMs += Date.now() - bufStart; bufCount++; bufStart = 0; } });
-            player.on('error', function() { errCount++; });
+            player.on('error', function() { errCount++; if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
             if (player.qualityLevels) {
                 var ql = player.qualityLevels();
                 ql.on('change', function() { var active = ql[ql.selectedIndex]; if (active && active.height) quality = active.height + 'p'; });
