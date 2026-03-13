@@ -157,9 +157,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     var data = await resp.json();
                     var parts = config.stream.jsonPath.split('.');
+                    var DENY = ['__proto__', 'constructor', 'prototype'];
                     var value = data;
                     for (var i = 0; i < parts.length; i++) {
-                        if (value == null) break;
+                        if (value == null || DENY.indexOf(parts[i]) !== -1) { value = null; break; }
                         value = value[parts[i]];
                     }
                     streamUrl = value || '';
@@ -218,10 +219,18 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         return code.toUpperCase();
     }
 
+    function safeColor(val) {
+        if (!val || typeof val !== 'string') return null;
+        if (/^#[0-9a-fA-F]{3,8}$/.test(val)) return val;
+        if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}/.test(val)) return val;
+        return null;
+    }
+
     function buildDynamicCss(config) {
         var css = '';
         var sel = '#player .video-js';
-        var c = config.colors || {};
+        var rc = config.colors || {};
+        var c = { play: safeColor(rc.play), controls: safeColor(rc.controls), progress: safeColor(rc.progress), buffer: safeColor(rc.buffer), track: safeColor(rc.track), spinner: safeColor(rc.spinner), icons: safeColor(rc.icons), text: safeColor(rc.text) };
         // Big play button (always styled for shape, color only if custom)
         css += sel + ' .vjs-big-play-button{font-size:clamp(4em,10vmin,8em)!important;width:1.5em!important;height:1.5em!important;line-height:1.5em!important;border-radius:50%!important;border:0.06em solid rgba(255,255,255,0.25)!important;padding:0!important;top:50%!important;left:50%!important;margin-top:-0.75em!important;margin-left:-0.75em!important;transition:background-color 0.3s ease,transform 0.2s ease!important}';
         if (c.play) {
@@ -462,8 +471,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     var data = await resp.json();
                     var parts = config.stream.jsonPath.split('.');
+                    var DENY2 = ['__proto__', 'constructor', 'prototype'];
                     var value = data;
-                    for (var i = 0; i < parts.length; i++) { if (value == null) break; value = value[parts[i]]; }
+                    for (var i = 0; i < parts.length; i++) { if (value == null || DENY2.indexOf(parts[i]) !== -1) { value = null; break; } value = value[parts[i]]; }
                     if (value) return [{ src: value, type: detectMime(value) }];
                 } catch (e) {}
             }
@@ -493,13 +503,21 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var offlineRetryBtn = document.getElementById('offline-retry-btn');
         var offlineRecheckTimer = null;
         function attemptOfflineRecovery() {
-            retryCount = 0;
             offlineEl.classList.remove('visible');
             retryEl.classList.add('visible');
             player.error(null);
             resolveStreamForRetry().then(function(src) {
                 retryEl.classList.remove('visible');
-                if (src && src.length) { player.src(src); player.play(); }
+                if (src && src.length) {
+                    retryCount = maxRetries - 1;
+                    player.src(src);
+                    player.play();
+                } else {
+                    offlineEl.classList.add('visible');
+                }
+            }).catch(function() {
+                retryEl.classList.remove('visible');
+                offlineEl.classList.add('visible');
             });
         }
         if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
@@ -600,7 +618,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         ctx.requestSession().then(function() {
                             var session = ctx.getCurrentSession(); if (!session) return;
                             var src = player.currentSrc(); if (!src) return;
-                            var mi = new chrome.cast.media.MediaInfo(src, 'application/x-mpegURL');
+                            var mi = new chrome.cast.media.MediaInfo(src, detectMime(src));
                             var req = new chrome.cast.media.LoadRequest(mi);
                             session.loadMedia(req);
                         }).catch(function(e) { console.log('Cast error:', e); });
@@ -768,7 +786,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
                     var clickUrl = data.clickUrl;
                     adClick.onclick = function() {
-                        if (clickUrl) window.open(clickUrl, '_blank');
+                        if (clickUrl && /^https?:\/\//i.test(clickUrl)) window.open(clickUrl, '_blank');
                     };
 
                     var skipInterval = null;
@@ -836,13 +854,12 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
                 // ── Intercept play or handle autoplay ──
                 var prerollDone = false;
+                function safePlay() { var p = player.play(); if (p && p.catch) p.catch(function() { player.muted(true); player.play(); }); }
 
                 function startPreroll(fromUserGesture) {
                     if (prerollDone) return;
                     prerollDone = true;
                     player.pause();
-
-                    function safePlay() { var p = player.play(); if (p && p.catch) p.catch(function() { player.muted(true); player.play(); }); }
                     if (prerollData && prerollReady) {
                         showAd(prerollData, function() { safePlay(); });
                     } else if (prerollData) {
