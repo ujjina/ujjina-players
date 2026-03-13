@@ -183,24 +183,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         return Promise.resolve('');
     }
 
-    // Quick probe: check if stream URL is reachable (<3s)
-    function probeStream(url) {
-        if (!url) return Promise.resolve(false);
-        var ctrl = new AbortController();
-        var t = setTimeout(function() { ctrl.abort(); }, 3000);
-        return fetch(url, { method: 'HEAD', mode: 'cors', signal: ctrl.signal })
-            .then(function(r) { clearTimeout(t); return r.ok; })
-            .catch(function() {
-                clearTimeout(t);
-                // HEAD may fail due to CORS — try GET with range header as fallback
-                var ctrl2 = new AbortController();
-                var t2 = setTimeout(function() { ctrl2.abort(); }, 3000);
-                return fetch(url, { mode: 'cors', signal: ctrl2.signal, headers: { 'Range': 'bytes=0-0' } })
-                    .then(function(r) { clearTimeout(t2); return r.ok || r.status === 206; })
-                    .catch(function() { clearTimeout(t2); return false; });
-            });
-    }
-
     async function resolveAndRender(config) {
         // Resolve stream URL
         var streamUrl = await resolveStreamUrl(config);
@@ -219,14 +201,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
         }
 
-        // Probe stream availability BEFORE handing to Video.js
-        var streamLive = false;
-        if (streamUrl) {
-            streamLive = await probeStream(streamUrl);
-        }
-
-        // Render player (always — sets up poster, logo, controls etc.)
-        renderPlayer(config, streamLive ? streamUrl : '', vttText, !streamLive);
+        // Always pass stream to Video.js — let IT try to connect
+        // If no URL resolved, mark as off-air immediately
+        // If URL exists, Video.js will try; error handler shows off-air if it fails
+        renderPlayer(config, streamUrl, vttText, !streamUrl);
     }
 
     function showError(msg) {
@@ -417,41 +395,33 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var offairPollTimer = null;
         player.on('playing', function() { hasEverPlayed = true; });
 
-        // Off-air play button: single attempt when clicked
+        // Off-air play button: try to connect directly (no probe — CORS blocks it)
         offairPlayBtn.addEventListener('click', function() {
             if (offairPlayBtn.classList.contains('checking')) return;
             offairPlayBtn.classList.add('checking');
             resolveStreamUrl(config).then(function(url) {
-                if (!url) { offairPlayBtn.classList.remove('checking'); return; }
-                return probeStream(url).then(function(live) {
-                    offairPlayBtn.classList.remove('checking');
-                    if (live) {
-                        offairEl.classList.remove('visible');
-                        player.controls(config.behavior ? config.behavior.controls !== false : true);
-                        player.src([{ src: url, type: detectMime(url) }]);
-                        player.play();
-                        if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
-                    }
-                });
+                offairPlayBtn.classList.remove('checking');
+                if (!url) return;
+                offairEl.classList.remove('visible');
+                player.controls(config.behavior ? config.behavior.controls !== false : true);
+                player.src([{ src: url, type: detectMime(url) }]);
+                player.play();
             }).catch(function() { offairPlayBtn.classList.remove('checking'); });
         });
 
-        // Silent background polling every 45-60s (randomized) — reusable from error handler too
+        // Silent background polling every 45-60s — try to load stream directly
         function startOffairPoll() {
             if (offairPollTimer) return;
             offairPollTimer = setInterval(function() {
-                if (document.hidden) return;
+                if (document.hidden || !offairEl.classList.contains('visible')) return;
                 resolveStreamUrl(config).then(function(url) {
                     if (!url) return;
-                    probeStream(url).then(function(live) {
-                        if (live && offairEl.classList.contains('visible')) {
-                            offairEl.classList.remove('visible');
-                            player.controls(config.behavior ? config.behavior.controls !== false : true);
-                            player.src([{ src: url, type: detectMime(url) }]);
-                            player.play();
-                            if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
-                        }
-                    });
+                    // Try loading — if it works, 'playing' event hides off-air
+                    // If it fails, error handler will re-show off-air
+                    offairEl.classList.remove('visible');
+                    player.controls(config.behavior ? config.behavior.controls !== false : true);
+                    player.src([{ src: url, type: detectMime(url) }]);
+                    player.play();
                 });
             }, 45000 + Math.random() * 15000);
         }
@@ -656,11 +626,12 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         }
         if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptRecovery);
         player.on('error', function() {
-            if (!hasEverPlayed && !streamUrl) {
-                // Never had a stream — go straight to off-air (no retries)
+            if (!hasEverPlayed) {
+                // Never played successfully — go straight to off-air (no retries)
                 showOffairState();
                 return;
             }
+            // Was playing and dropped — retry aggressively
             if (retryCount < maxRetries) {
                 retryCount++;
                 offlineMsgEl.textContent = 'Reconectando... (' + retryCount + '/' + maxRetries + ')';
