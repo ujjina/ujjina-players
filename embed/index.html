@@ -621,13 +621,18 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     var now = new Date(), day = now.getDay(), mins = now.getHours() * 60 + now.getMinutes();
                     var today = schedule.filter(function(e) { return e.day === day; }).sort(function(a, b) { return pt(a.time) - pt(b.time); });
                     var cur = null, nxt = null;
-                    for (var i = 0; i < today.length; i++) { if (pt(today[i].time) <= mins) { cur = today[i]; nxt = today[i + 1] || null; } }
+                    for (var i = 0; i < today.length; i++) {
+                        var start = pt(today[i].time);
+                        var end = today[i].endTime ? pt(today[i].endTime) : (today[i + 1] ? pt(today[i + 1].time) : 1440);
+                        if (mins >= start && mins < end) { cur = today[i]; nxt = today[i + 1] || null; break; }
+                    }
                     var nowEl = document.getElementById('epg-now'), nxtEl = document.getElementById('epg-next');
                     // Si no hay programa actual, ocultar toda la barra EPG
                     if (!cur) { bar.style.display = 'none'; return; }
                     bar.style.display = '';
-                    if (nowEl) nowEl.textContent = cur.title;
-                    if (nxtEl) nxtEl.textContent = nxt ? nxt.title + ' (' + nxt.time + ')' : '';
+                    var timeRange = cur.time + (cur.endTime ? ' - ' + cur.endTime : '');
+                    if (nowEl) nowEl.textContent = timeRange + '  ' + cur.title;
+                    if (nxtEl) nxtEl.textContent = nxt ? nxt.title + ' (' + nxt.time + (nxt.endTime ? ' - ' + nxt.endTime : '') + ')' : '';
                     var sep = bar.querySelector('.epg-sep'), labels = bar.querySelectorAll('.epg-label');
                     if (!nxt) { if (sep) sep.style.display = 'none'; if (labels[1]) labels[1].style.display = 'none'; if (nxtEl) nxtEl.style.display = 'none'; }
                     else { if (sep) sep.style.display = ''; if (labels[1]) labels[1].style.display = ''; if (nxtEl) nxtEl.style.display = ''; }
