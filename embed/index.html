@@ -365,23 +365,38 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             player.ready(function() { fixAll(player.audioTracks()); fixAll(player.textTracks()); });
         })();
 
-        // ─── Password protection ───
+        // ─── Password protection (server-side verification) ───
         if (config.protection && config.protection.enabled && config.protection.password) {
             var pwInput = document.getElementById('pw-input');
             var pwBtn = document.getElementById('pw-btn');
             var pwError = document.getElementById('pw-error');
-            var correctPw = config.protection.password;
+            var pwChecking = false;
             player.el().style.visibility = 'hidden';
             function unlock() {
-                if (pwInput.value === correctPw) {
-                    pwOverlay.classList.remove('visible');
-                    player.el().style.visibility = 'visible';
-                    if (wantsAutoplay) player.play();
-                } else {
-                    pwError.textContent = 'Contraseña incorrecta';
-                    pwInput.classList.add('error');
-                    setTimeout(function() { pwInput.classList.remove('error'); pwError.textContent = ''; }, 1500);
-                }
+                if (pwChecking) return;
+                pwChecking = true;
+                pwBtn.textContent = '...';
+                fetch('https://panel.ujjina.com/api/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: params.get('uid'), pid: params.get('pid'), password: pwInput.value })
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    pwChecking = false;
+                    pwBtn.textContent = 'Acceder';
+                    if (data.ok) {
+                        pwOverlay.classList.remove('visible');
+                        player.el().style.visibility = 'visible';
+                        if (wantsAutoplay) player.play();
+                    } else {
+                        pwError.textContent = 'Contraseña incorrecta';
+                        pwInput.classList.add('error');
+                        setTimeout(function() { pwInput.classList.remove('error'); pwError.textContent = ''; }, 1500);
+                    }
+                }).catch(function() {
+                    pwChecking = false;
+                    pwBtn.textContent = 'Acceder';
+                    pwError.textContent = 'Error de conexión';
+                });
             }
             pwBtn.addEventListener('click', unlock);
             pwInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') unlock(); });
