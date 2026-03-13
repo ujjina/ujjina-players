@@ -22,6 +22,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 #offline-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background-size:cover;background-position:center;background-color:#000}
 #offline-overlay.visible{display:flex}
 #offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}
+#offline-overlay .offline-retry-btn{margin-top:16px;padding:10px 28px;border:2px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,16px);font-weight:600;cursor:pointer;transition:background 0.2s,border-color 0.2s}
+#offline-overlay .offline-retry-btn:hover{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.5)}
 #retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}
 #retry-overlay.visible{display:flex}
 #retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -73,7 +75,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
 <div id="player">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
-    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Sin señal disponible</div></div>
+    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Sin señal disponible</div><button class="offline-retry-btn" id="offline-retry-btn">Reintentar</button></div>
     <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
     <div id="ad-overlay"><video id="ad-video" playsinline></video><div class="ad-label" id="ad-label">Anuncio</div><div class="ad-click" id="ad-click"></div><div class="ad-skip disabled" id="ad-skip">Omitir en...</div></div>
     <div id="password-overlay"><div class="pw-box">
@@ -130,6 +132,16 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             showError('Error al cargar configuración');
         });
 
+    function detectMime(url) {
+        if (!url) return 'application/x-mpegURL';
+        var u = url.split('?')[0].toLowerCase();
+        if (u.match(/\.mpd$/)) return 'application/dash+xml';
+        if (u.match(/\.mp4$/)) return 'video/mp4';
+        if (u.match(/\.webm$/)) return 'video/webm';
+        if (u.match(/\.mp3$/)) return 'audio/mpeg';
+        return 'application/x-mpegURL';
+    }
+
     async function resolveAndRender(config) {
         // Resolve stream URL
         var streamUrl = '';
@@ -138,7 +150,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 streamUrl = config.stream.url || '';
             } else if (config.stream.jsonUrl && config.stream.jsonPath) {
                 try {
-                    var resp = await fetch(config.stream.jsonUrl);
+                    var jCtrl = new AbortController();
+                    var jTimeout = setTimeout(function() { jCtrl.abort(); }, 10000);
+                    var resp = await fetch(config.stream.jsonUrl, { signal: jCtrl.signal });
+                    clearTimeout(jTimeout);
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     var data = await resp.json();
                     var parts = config.stream.jsonPath.split('.');
@@ -307,7 +322,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             autoplay: (hasAds || hasProtection) ? false : wantsAutoplay,
             liveui: config.behavior ? config.behavior.liveui !== false : true,
             fluid: false,
-            sources: streamUrl ? [{ src: streamUrl, type: 'application/x-mpegURL' }] : []
+            sources: streamUrl ? [{ src: streamUrl, type: detectMime(streamUrl) }] : []
         });
 
         // ─── Track label fix (audio + subtitles from HLS manifests) ───
@@ -440,13 +455,16 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         async function resolveStreamForRetry() {
             if (config.stream && config.stream.method !== 'direct' && config.stream.jsonUrl && config.stream.jsonPath) {
                 try {
-                    var resp = await fetch(config.stream.jsonUrl);
+                    var rCtrl = new AbortController();
+                    var rTimeout = setTimeout(function() { rCtrl.abort(); }, 10000);
+                    var resp = await fetch(config.stream.jsonUrl, { signal: rCtrl.signal });
+                    clearTimeout(rTimeout);
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     var data = await resp.json();
                     var parts = config.stream.jsonPath.split('.');
                     var value = data;
                     for (var i = 0; i < parts.length; i++) { if (value == null) break; value = value[parts[i]]; }
-                    if (value) return [{ src: value, type: 'application/x-mpegURL' }];
+                    if (value) return [{ src: value, type: detectMime(value) }];
                 } catch (e) {}
             }
             return player.currentSources();
@@ -471,6 +489,29 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             retryEl.classList.remove('visible');
             offlineEl.classList.remove('visible');
         });
+        // Offline recovery: retry button + periodic recheck every 30s
+        var offlineRetryBtn = document.getElementById('offline-retry-btn');
+        var offlineRecheckTimer = null;
+        function attemptOfflineRecovery() {
+            retryCount = 0;
+            offlineEl.classList.remove('visible');
+            retryEl.classList.add('visible');
+            player.error(null);
+            resolveStreamForRetry().then(function(src) {
+                retryEl.classList.remove('visible');
+                if (src && src.length) { player.src(src); player.play(); }
+            });
+        }
+        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
+        player.on('error', function() {
+            if (retryCount >= maxRetries && !offlineRecheckTimer) {
+                offlineRecheckTimer = setInterval(function() {
+                    if (!offlineEl.classList.contains('visible')) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; return; }
+                    attemptOfflineRecovery();
+                }, 30000);
+            }
+        });
+        player.on('playing', function() { if (offlineRecheckTimer) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; } });
 
         // ─── Quality selector ───
         (function() {
@@ -514,7 +555,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 btn.innerHTML = ql[idx].height ? ql[idx].height + 'p' : 'HD';
                 btn.appendChild(menu);
             }
-            ql.on('addqualitylevel', function() { setTimeout(buildMenu, 500); });
+            var qlDebounce = null;
+            ql.on('addqualitylevel', function() { clearTimeout(qlDebounce); qlDebounce = setTimeout(buildMenu, 800); });
             var cb = player.getChild('controlBar');
             if (cb) { var fs = cb.getChild('fullscreenToggle'); if (fs) cb.el().insertBefore(btn, fs.el()); else cb.el().appendChild(btn); }
         })();
@@ -800,8 +842,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     prerollDone = true;
                     player.pause();
 
+                    function safePlay() { var p = player.play(); if (p && p.catch) p.catch(function() { player.muted(true); player.play(); }); }
                     if (prerollData && prerollReady) {
-                        showAd(prerollData, function() { player.play(); });
+                        showAd(prerollData, function() { safePlay(); });
                     } else if (prerollData) {
                         adLabel.textContent = 'Cargando anuncio...';
                         adOverlay.classList.add('visible');
@@ -810,7 +853,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                 clearInterval(waitTimer);
                                 adOverlay.classList.remove('visible');
                                 adLabel.textContent = 'Anuncio';
-                                showAd(prerollData, function() { player.play(); });
+                                showAd(prerollData, function() { safePlay(); });
                             }
                         }, 200);
                         setTimeout(function() {
@@ -819,7 +862,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                 adOverlay.classList.remove('visible');
                                 adLabel.textContent = 'Anuncio';
                                 player.controls(config.behavior ? config.behavior.controls !== false : true);
-                                player.play();
+                                safePlay();
                             }
                         }, 8000);
                     } else {
@@ -831,7 +874,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                 clearInterval(pollTimer);
                                 adOverlay.classList.remove('visible');
                                 adLabel.textContent = 'Anuncio';
-                                showAd(prerollData, function() { player.play(); });
+                                showAd(prerollData, function() { safePlay(); });
                             }
                         }, 300);
                         setTimeout(function() {
@@ -839,7 +882,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             adOverlay.classList.remove('visible');
                             adLabel.textContent = 'Anuncio';
                             player.controls(config.behavior ? config.behavior.controls !== false : true);
-                            player.play();
+                            safePlay();
                         }, 10000);
                     }
                 }
@@ -872,13 +915,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
                 // ── MID-ROLL: fetch + play after X minutes of watch time ──
                 if (midroll && midrollTime > 0) {
-                    var watchedTime = 0, lastCheck = 0;
+                    var watchedTime = 0, watchStart = 0;
+                    player.on('play', function() { if (!watchStart) watchStart = Date.now(); });
+                    player.on('pause', function() { if (watchStart) { watchedTime += (Date.now() - watchStart) / 1000; watchStart = 0; } });
                     player.on('timeupdate', function() {
                         if (midrollFired || adPlaying || !prerollDone) return;
-                        var ct = player.currentTime();
-                        if (lastCheck > 0 && ct > lastCheck) watchedTime += ct - lastCheck;
-                        lastCheck = ct;
-                        if (watchedTime >= midrollTime) {
+                        var total = watchedTime + (watchStart ? (Date.now() - watchStart) / 1000 : 0);
+                        if (total >= midrollTime) {
                             midrollFired = true;
                             // For mid-roll, user has already interacted, so muted autoplay works
                             fetch(PROXY + encodeURIComponent(vastUrl))
@@ -889,9 +932,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                         adVideo.src = data.mediaUrl;
                                         adVideo.muted = true;
                                         adVideo.load();
+                                        var midrollShown = false;
                                         adVideo.addEventListener('canplay', function() {
-                                            showAd(data, function() { player.play(); });
+                                            if (midrollShown) return;
+                                            midrollShown = true;
+                                            showAd(data, function() { safePlay(); });
                                         }, { once: true });
+                                        setTimeout(function() { if (!midrollShown) { midrollShown = true; } }, 8000);
                                     }
                                 })
                                 .catch(function() {});
