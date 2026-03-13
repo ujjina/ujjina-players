@@ -626,12 +626,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         }
         if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptRecovery);
         player.on('error', function() {
-            if (!hasEverPlayed) {
-                // Never played successfully — go straight to off-air (no retries)
-                showOffairState();
-                return;
-            }
-            // Was playing and dropped — retry aggressively
+            // Always retry — then show off-air if all retries fail
             if (retryCount < maxRetries) {
                 retryCount++;
                 offlineMsgEl.textContent = 'Reconectando... (' + retryCount + '/' + maxRetries + ')';
@@ -642,9 +637,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     var src = await resolveStreamForRetry();
                     if (src && src.length) { player.src(src); player.play(); }
                     else { showOffairState(); }
-                }, 5000);
+                }, hasEverPlayed ? 5000 : 3000);
             } else {
-                // All retries exhausted — show off-air state (not ugly error)
+                // All retries exhausted — show elegant off-air (not ugly error)
                 showOffairState();
             }
         });
