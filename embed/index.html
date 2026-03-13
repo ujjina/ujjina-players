@@ -206,25 +206,32 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var css = '';
         var sel = '#player .video-js';
         var c = config.colors || {};
-        var playRgba = hexToRgba(c.play, 0.85);
-        var playRgbaHover = hexToRgba(c.play, 1);
-
-        // Big play button
-        css += sel + ' .vjs-big-play-button{background-color:' + playRgba + '!important;font-size:clamp(4em,10vmin,8em)!important;width:1.5em!important;height:1.5em!important;line-height:1.5em!important;border-radius:50%!important;border:0.06em solid rgba(255,255,255,0.25)!important;padding:0!important;top:50%!important;left:50%!important;margin-top:-0.75em!important;margin-left:-0.75em!important;transition:background-color 0.3s ease,transform 0.2s ease!important}';
-        css += sel + ' .vjs-big-play-button:hover{background-color:' + playRgbaHover + '!important;transform:scale(1.1)!important}';
+        // Big play button (always styled for shape, color only if custom)
+        css += sel + ' .vjs-big-play-button{font-size:clamp(4em,10vmin,8em)!important;width:1.5em!important;height:1.5em!important;line-height:1.5em!important;border-radius:50%!important;border:0.06em solid rgba(255,255,255,0.25)!important;padding:0!important;top:50%!important;left:50%!important;margin-top:-0.75em!important;margin-left:-0.75em!important;transition:background-color 0.3s ease,transform 0.2s ease!important}';
+        if (c.play) {
+            var playRgba = hexToRgba(c.play, 0.85);
+            var playRgbaHover = hexToRgba(c.play, 1);
+            css += sel + ' .vjs-big-play-button{background-color:' + playRgba + '!important}';
+            css += sel + ' .vjs-big-play-button:hover{background-color:' + playRgbaHover + '!important}';
+        }
+        css += sel + ' .vjs-big-play-button:hover{transform:scale(1.1)!important}';
         css += sel + ' .vjs-big-play-button .vjs-icon-placeholder::before{display:flex!important;align-items:center!important;justify-content:center!important}';
 
-        // Control bar colors
-        css += sel + ' .vjs-control-bar{background-color:' + (c.controls || '#1a1a2e') + '!important}';
-        css += sel + ' .vjs-play-progress,' + sel + ' .vjs-volume-level{background-color:' + (c.progress || '#4a9eff') + '!important}';
-        css += sel + ' .vjs-load-progress{background-color:' + (c.buffer || '#555555') + '!important}';
-        css += sel + ' .vjs-load-progress div{background:none!important}';
-        css += sel + ' .vjs-progress-holder{background-color:' + (c.track || '#333333') + '!important}';
-        var spinColor = c.spinner || '#ffffff';
-        var spinRgba = hexToRgba(spinColor, 0.2);
-        css += sel + ' .vjs-loading-spinner{border-color:' + spinRgba + '!important;border-top-color:' + spinColor + '!important}';
-        css += sel + ' .vjs-control-bar .vjs-control{color:' + (c.icons || '#fff') + '!important}';
-        css += sel + ' .vjs-time-control,' + sel + ' .vjs-live-display{color:' + (c.text || '#fff') + '!important}';
+        // Control bar colors (only override if custom color is set)
+        if (c.controls) css += sel + ' .vjs-control-bar{background-color:' + c.controls + '!important}';
+        if (c.progress) css += sel + ' .vjs-play-progress,' + sel + ' .vjs-volume-level{background-color:' + c.progress + '!important}';
+        if (c.buffer) {
+            css += sel + ' .vjs-load-progress{background-color:' + c.buffer + '!important}';
+            css += sel + ' .vjs-load-progress div{background:none!important}';
+        }
+        if (c.track) css += sel + ' .vjs-progress-holder{background-color:' + c.track + '!important}';
+        if (c.spinner) {
+            var spinColor = c.spinner;
+            var spinRgba = hexToRgba(spinColor, 0.2);
+            css += sel + ' .vjs-loading-spinner{border-color:' + spinRgba + '!important;border-top-color:' + spinColor + '!important}';
+        }
+        if (c.icons) css += sel + ' .vjs-control-bar .vjs-control{color:' + c.icons + '!important}';
+        if (c.text) css += sel + ' .vjs-time-control,' + sel + ' .vjs-live-display{color:' + c.text + '!important}';
 
         if (config.type === 'radio') {
             css += sel + '{background-color:transparent!important}';
