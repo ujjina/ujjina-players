@@ -889,7 +889,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var sid = Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
             var dur = 0, bufCount = 0, bufMs = 0, errCount = 0, ttff = 0, quality = '', ref = '';
             var bufStart = 0, playStart = 0;
-            try { ref = document.referrer || (window.parent !== window ? document.referrer : 'direct'); } catch (e) { ref = 'iframe'; }
+            try { ref = document.referrer || (window.parent !== window ? 'iframe' : 'direct'); } catch (e) { ref = 'iframe'; }
             var loadStart = Date.now();
             player.one('playing', function() { ttff = Date.now() - loadStart; });
             player.on('waiting', function() { if (!bufStart) bufStart = Date.now(); });
@@ -909,14 +909,17 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             send('start');
             player.on('play', function() { playStart = Date.now(); });
             player.on('pause', function() { if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
+            var lastSentDur = 0;
             setInterval(function() {
                 if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = Date.now(); }
-                send('heartbeat');
+                var deltaDur = dur - lastSentDur;
+                lastSentDur = dur;
+                send('heartbeat', { d: Math.round(deltaDur) });
                 bufCount = 0; bufMs = 0; errCount = 0;
             }, 300000);
             window.addEventListener('beforeunload', function() {
                 if (playStart) { dur += (Date.now() - playStart) / 1000; }
-                send('end');
+                send('end', { d: Math.round(dur - lastSentDur) });
             });
         })();
     }
