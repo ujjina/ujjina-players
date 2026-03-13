@@ -623,7 +623,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     var cur = null, nxt = null;
                     for (var i = 0; i < today.length; i++) { if (pt(today[i].time) <= mins) { cur = today[i]; nxt = today[i + 1] || null; } }
                     var nowEl = document.getElementById('epg-now'), nxtEl = document.getElementById('epg-next');
-                    if (nowEl) nowEl.textContent = cur ? cur.title : 'Sin programación';
+                    // Si no hay programa actual, ocultar toda la barra EPG
+                    if (!cur) { bar.style.display = 'none'; return; }
+                    bar.style.display = '';
+                    if (nowEl) nowEl.textContent = cur.title;
                     if (nxtEl) nxtEl.textContent = nxt ? nxt.title + ' (' + nxt.time + ')' : '';
                     var sep = bar.querySelector('.epg-sep'), labels = bar.querySelectorAll('.epg-label');
                     if (!nxt) { if (sep) sep.style.display = 'none'; if (labels[1]) labels[1].style.display = 'none'; if (nxtEl) nxtEl.style.display = 'none'; }
