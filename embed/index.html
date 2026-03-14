@@ -211,7 +211,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
     function safeColor(val) {
         if (!val || typeof val !== 'string') return null;
         if (/^#[0-9a-fA-F]{3,8}$/.test(val)) return val;
-        if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}/.test(val)) return val;
+        if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\)$/.test(val)) return val;
         return null;
     }
 
@@ -296,7 +296,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
         // Password overlay — hide if not needed
         var pwOverlay = document.getElementById('password-overlay');
-        if (!(config.protection && config.protection.enabled && config.protection.password)) {
+        if (!(config.protection && config.protection.enabled)) {
             pwOverlay.style.display = 'none';
         } else {
             pwOverlay.classList.add('visible');
@@ -305,7 +305,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // Disable autoplay when ads or password protection are active
         var wantsAutoplay = config.behavior ? !!config.behavior.autoplay : false;
         var hasAds = !!(config.ads && config.ads.enabled && config.ads.vastUrl);
-        var hasProtection = !!(config.protection && config.protection.enabled && config.protection.password);
+        var hasProtection = !!(config.protection && config.protection.enabled);
 
         // Initialize Video.js player
         var player = videojs('vjs-player', {
@@ -350,7 +350,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         })();
 
         // ─── Password protection (server-side verification) ───
-        if (config.protection && config.protection.enabled && config.protection.password) {
+        if (config.protection && config.protection.enabled) {
             var pwInput = document.getElementById('pw-input');
             var pwBtn = document.getElementById('pw-btn');
             var pwError = document.getElementById('pw-error');
