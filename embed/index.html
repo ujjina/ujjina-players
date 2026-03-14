@@ -19,21 +19,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 #player .video-js .vjs-error-display{display:none!important}
 #player .video-js.vjs-error .vjs-big-play-button{display:block!important}
 .player-logo{position:absolute;z-index:30;pointer-events:none}
-#offair-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:48;display:none;flex-direction:column;justify-content:flex-end;background-size:cover;background-position:center;background-color:#111}
-#offair-overlay.visible{display:flex}
-#offair-overlay::before{content:'';position:absolute;bottom:0;left:0;width:100%;height:60%;background:linear-gradient(0deg,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0) 100%);pointer-events:none}
-#offair-overlay .offair-content{position:relative;z-index:1;padding:20px 24px;opacity:0;transform:translateY(10px);animation:offair-enter 0.4s ease-out 0.1s forwards}
-@keyframes offair-enter{to{opacity:1;transform:translateY(0)}}
-#offair-overlay .offair-status{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-#offair-overlay .offair-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);animation:offair-pulse 2s ease-in-out infinite}
-@keyframes offair-pulse{0%,100%{opacity:0.4}50%{opacity:1}}
-#offair-overlay .offair-label{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(9px,1.5vmin,11px);font-weight:600;text-transform:uppercase;letter-spacing:2px}
-#offair-overlay .offair-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,20px);font-weight:600;margin-bottom:6px}
-#offair-overlay .offair-schedule{color:rgba(255,255,255,0.5);font-family:Inter,sans-serif;font-size:clamp(11px,1.8vmin,14px)}
-#offair-overlay .offair-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.3s,border-color 0.3s;backdrop-filter:blur(4px);z-index:2}
-#offair-overlay .offair-play:hover{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.5)}
-#offair-overlay .offair-play svg{width:24px;height:24px;fill:rgba(255,255,255,0.7);margin-left:3px}
-#offair-overlay.fade-out{opacity:0;transition:opacity 0.6s ease-out}
+#offair-bar{position:absolute;bottom:0;left:0;width:100%;z-index:48;display:none;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(0deg,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0) 100%);min-height:40px;box-sizing:border-box;pointer-events:none}
+#offair-bar.visible{display:flex}
+#offair-bar .offair-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.35);flex-shrink:0;animation:offair-pulse 2s ease-in-out infinite}
+@keyframes offair-pulse{0%,100%{opacity:0.35}50%{opacity:0.8}}
+#offair-bar .offair-label{color:rgba(255,255,255,0.7);font-family:Inter,sans-serif;font-size:clamp(10px,1.8vmin,13px);font-weight:600}
+#offair-bar .offair-schedule{color:rgba(255,255,255,0.45);font-family:Inter,sans-serif;font-size:clamp(10px,1.6vmin,12px);margin-left:auto}
+#offair-bar.fade-out{opacity:0;transition:opacity 0.6s ease-out}
 #retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}
 #retry-overlay.visible{display:flex}
 #retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -85,7 +77,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
 <div id="player">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
-    <div id="offair-overlay"><div class="offair-play" id="offair-play"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div><div class="offair-content"><div class="offair-status"><div class="offair-dot"></div><span class="offair-label">FUERA DE EMISIÓN</span></div><div class="offair-msg" id="offair-msg"></div><div class="offair-schedule" id="offair-schedule"></div></div></div>
+    <div id="offair-bar"><div class="offair-dot"></div><span class="offair-label">Fuera de emisión</span><span class="offair-schedule" id="offair-schedule"></span></div>
     <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
     <div id="ad-overlay"><video id="ad-video" playsinline></video><div class="ad-label" id="ad-label">Anuncio</div><div class="ad-click" id="ad-click"></div><div class="ad-skip disabled" id="ad-skip">Omitir en...</div></div>
     <div id="password-overlay"><div class="pw-box">
@@ -312,20 +304,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             videoEl.setAttribute('poster', config.poster.image);
         }
 
-        // Off-air overlay config
-        var offairEl = document.getElementById('offair-overlay');
-        var offairMsgEl = document.getElementById('offair-msg');
+        // Off-air bar config (subtle bar at bottom — poster + big play button stay visible)
+        var offairBar = document.getElementById('offair-bar');
         var offairScheduleEl = document.getElementById('offair-schedule');
-        // Background: offline image > poster > dark
-        var offairBg = (config.offline && config.offline.image) ? config.offline.image
-                     : (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
-        if (offairBg) {
-            var offImg = new Image(); offImg.src = offairBg;
-            offairEl.style.backgroundImage = "url('" + offairBg.replace(/'/g, "\\'") + "')";
-        }
-        if (config.offline && config.offline.message) {
-            offairMsgEl.textContent = config.offline.message;
-        }
 
         // Password overlay — hide if not needed
         var pwOverlay = document.getElementById('password-overlay');
@@ -492,7 +473,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var retryCount = 0, maxRetries = 5;
         var hasEverPlayed = false;
         var retryEl = document.getElementById('retry-overlay');
-        var offairPlayBtn = document.getElementById('offair-play');
         var offairPollTimer = null;
 
         async function resolveStreamForRetry() {
@@ -547,8 +527,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         function showOffairState() {
             retryCount = maxRetries;
             retryEl.classList.remove('visible');
-            offairEl.classList.add('visible');
-            player.controls(false);
+            offairBar.classList.add('visible');
             player.error(null);
             updateOffairSchedule();
             startOffairPoll();
@@ -558,7 +537,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         function startOffairPoll() {
             if (offairPollTimer) return;
             offairPollTimer = setInterval(function() {
-                if (document.hidden || !offairEl.classList.contains('visible')) return;
+                if (document.hidden || !offairBar.classList.contains('visible')) return;
                 resolveStreamForRetry().then(function(src) {
                     if (src && src.length) {
                         player.error(null);
@@ -569,19 +548,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 }).catch(function() {});
             }, 30000);
         }
-
-        // Manual retry via play button on off-air overlay
-        if (offairPlayBtn) offairPlayBtn.addEventListener('click', function() {
-            offairEl.classList.remove('visible');
-            retryEl.classList.add('visible');
-            player.error(null);
-            retryCount = 0;
-            resolveStreamForRetry().then(function(src) {
-                retryEl.classList.remove('visible');
-                if (src && src.length) { player.src(src); player.play(); }
-                else { showOffairState(); }
-            }).catch(function() { retryEl.classList.remove('visible'); showOffairState(); });
-        });
 
         // ── INITIAL LOAD: 8-second deadline ──
         // If stream doesn't fire 'playing' within 8s → off-air (no spinner shown)
@@ -624,14 +590,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             hasEverPlayed = true;
             retryCount = 0;
             retryEl.classList.remove('visible');
-            if (offairEl.classList.contains('visible')) {
-                // Smooth crossfade from off-air to live
-                offairEl.classList.add('fade-out');
-                setTimeout(function() {
-                    offairEl.classList.remove('visible', 'fade-out');
-                }, 600);
-            }
-            player.controls(config.behavior ? config.behavior.controls !== false : true);
+            offairBar.classList.remove('visible');
             if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
         });
 
