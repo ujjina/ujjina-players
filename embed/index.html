@@ -474,6 +474,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var hasEverPlayed = false;
         var offairLabelEl = document.getElementById('offair-label');
         var offairPollTimer = null;
+        // Save original sources so we can retry after src([]) clears them
+        var originalSources = streamUrl ? [{ src: streamUrl, type: detectMime(streamUrl) }] : [];
 
         async function resolveStreamForRetry() {
             if (config.stream && config.stream.method !== 'direct' && config.stream.jsonUrl && config.stream.jsonPath) {
@@ -491,8 +493,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     if (value) return [{ src: value, type: detectMime(value) }];
                 } catch (e) {}
             }
-            return player.currentSources();
-        }
+            // For direct streams, use saved original (player.currentSources() is empty after src([]))
+            return originalSources;
 
         // Show EPG next program in off-air overlay
         function updateOffairSchedule() {
