@@ -495,6 +495,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
             // For direct streams, use saved original (player.currentSources() is empty after src([]))
             return originalSources;
+        }
 
         // Show EPG next program in off-air overlay
         function updateOffairSchedule() {
@@ -545,7 +546,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             offairBar.classList.add('visible');
         }
 
-        // Silent background poll every 30s
+        // Silent background poll every 15s — try to auto-recover
         function startOffairPoll() {
             if (offairPollTimer) return;
             offairPollTimer = setInterval(function() {
@@ -554,28 +555,39 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     if (src && src.length) {
                         player.error(null);
                         retryCount = 0;
+                        // Remove off-air state BEFORE playing to prevent play handler conflict
+                        player.el().classList.remove('vjs-offair');
+                        offairBar.classList.remove('visible');
                         player.src(src);
                         player.play();
                     }
                 }).catch(function() {});
-            }, 30000);
+            }, 15000);
         }
 
         // Big play button = retry when in off-air state
-        player.on('play', function() {
-            if (!player.el().classList.contains('vjs-offair')) return;
-            player.pause();
-            player.el().classList.remove('vjs-offair');
-            offairBar.classList.remove('visible');
-            retryCount = 0;
-            resolveStreamForRetry().then(function(src) {
-                if (src && src.length) {
-                    player.src(src);
-                    player.play();
-                } else {
-                    showOffairState();
-                }
-            }).catch(function() { showOffairState(); });
+        // Must use direct DOM click because Video.js won't fire 'play' event on empty source
+        player.ready(function() {
+            var bigBtn = player.el().querySelector('.vjs-big-play-button');
+            if (bigBtn) {
+                bigBtn.addEventListener('click', function(e) {
+                    if (!player.el().classList.contains('vjs-offair')) return;
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    player.el().classList.remove('vjs-offair');
+                    offairBar.classList.remove('visible');
+                    retryCount = 0;
+                    showReconnecting();
+                    resolveStreamForRetry().then(function(src) {
+                        if (src && src.length) {
+                            player.src(src);
+                            player.play();
+                        } else {
+                            showOffairState();
+                        }
+                    }).catch(function() { showOffairState(); });
+                }, true);
+            }
         });
 
         // ── INITIAL LOAD: 8-second deadline ──
