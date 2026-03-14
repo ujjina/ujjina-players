@@ -611,18 +611,29 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
         });
 
-        // ── INITIAL LOAD: 8-second deadline ──
-        // If stream doesn't fire 'playing' within 8s → off-air (no spinner shown)
-        var isOffair = !streamUrl;
-        if (isOffair) {
+        // ── INITIAL LOAD: check stream availability via fetch (no autoplay) ──
+        if (!streamUrl) {
             // No stream URL at all → off-air immediately
             showOffairState();
         } else {
-            // Stream URL exists → give Video.js 8s to connect
-            var firstPlayTimer = setTimeout(function() {
-                if (!hasEverPlayed) showOffairState();
-            }, 8000);
-            player.one('playing', function() { clearTimeout(firstPlayTimer); });
+            // Stream URL exists → check if it's reachable
+            var initCtrl = new AbortController();
+            var initTimeout = setTimeout(function() { initCtrl.abort(); }, 8000);
+            fetch(streamUrl, { signal: initCtrl.signal }).then(function(r) {
+                clearTimeout(initTimeout);
+                if (r.ok) {
+                    // Stream is available — remove vjs-offair, show normal poster + play
+                    player.el().classList.remove('vjs-offair');
+                    // Player already has the source set, user clicks play when ready
+                } else {
+                    // Stream URL exists but server says no → off-air
+                    showOffairState();
+                }
+            }).catch(function() {
+                clearTimeout(initTimeout);
+                // Network error / CORS / timeout → off-air
+                showOffairState();
+            });
         }
 
         // ── ERROR HANDLER ──
