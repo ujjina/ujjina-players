@@ -347,8 +347,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         } else if (config.poster && config.poster.image) {
             offairEl.style.backgroundImage = "url('" + config.poster.image.replace(/'/g, "\\'") + "')";
         }
-        // Off-air text is always "Fuera de emisión" — NOT the user's offline message
-        // The user's offline message is for the reconnecting overlay only
+        if (config.offline && config.offline.message) {
+            offairTextEl.textContent = config.offline.message;
+        }
         // Show next scheduled program from EPG if available
         if (config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length) {
             var now = new Date();
@@ -430,16 +431,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             offairEl.classList.add('visible');
             player.controls(false);
             startOffairPoll();
-        }
-
-        // Fast off-air detection: if stream doesn't play within 8s, show off-air
-        if (streamUrl && !isOffair) {
-            var firstPlayTimer = setTimeout(function() {
-                if (!hasEverPlayed) {
-                    showOffairState();
-                }
-            }, 8000);
-            player.on('playing', function() { clearTimeout(firstPlayTimer); });
         }
 
         // ─── Track label fix (audio + subtitles from HLS manifests) ───
