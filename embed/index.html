@@ -90,26 +90,12 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
     </div></div>
 </div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <!-- Video.js + Quality Levels -->
 <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.1.0/dist/videojs-contrib-quality-levels.min.js"></script>
 
 <script>
 (function() {
-    // Firebase config
-    firebase.initializeApp({
-        apiKey: "AIzaSyBcKe_gKfU64C7lvFH0DZ41JcwbOrR7GxA",
-        authDomain: "ujjina-player-studio.firebaseapp.com",
-        projectId: "ujjina-player-studio",
-        storageBucket: "ujjina-player-studio.firebasestorage.app",
-        messagingSenderId: "277481746248",
-        appId: "1:277481746248:web:3c4e73663cc3a281880d7d"
-    });
-    var db = firebase.firestore();
-
     // Read uid & pid from URL
     var params = new URLSearchParams(window.location.search);
     var uid = params.get('uid');
@@ -120,17 +106,17 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         return;
     }
 
-    // Load config from Firestore
-    db.collection('players').doc(uid).collection('list').doc(pid).get()
-        .then(function(doc) {
-            if (!doc.exists) {
-                showError('Reproductor no encontrado');
-                return;
-            }
-            return resolveAndRender(doc.data());
+    // Load config from server-side API (never exposes password)
+    fetch('https://panel.ujjina.com/api/player-config?uid=' + encodeURIComponent(uid) + '&pid=' + encodeURIComponent(pid))
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(config) {
+            return resolveAndRender(config);
         })
         .catch(function(err) {
-            console.error('Firestore error:', err);
+            console.error('Config error:', err);
             showError('Error al cargar configuración');
         });
 
