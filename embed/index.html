@@ -19,11 +19,21 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 #player .video-js .vjs-error-display{display:none!important}
 #player .video-js.vjs-error .vjs-big-play-button{display:block!important}
 .player-logo{position:absolute;z-index:30;pointer-events:none}
-#offline-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;background-size:cover;background-position:center;background-color:#000}
-#offline-overlay.visible{display:flex}
-#offline-overlay .offline-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,22px);font-weight:600;text-align:center;padding:12px 24px;background:rgba(0,0,0,0.6);border-radius:8px;max-width:80%;backdrop-filter:blur(4px)}
-#offline-overlay .offline-retry-btn{margin-top:16px;padding:10px 28px;border:2px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;font-family:Inter,sans-serif;font-size:clamp(12px,2vmin,16px);font-weight:600;cursor:pointer;transition:background 0.2s,border-color 0.2s}
-#offline-overlay .offline-retry-btn:hover{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.5)}
+#offair-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:48;display:none;flex-direction:column;justify-content:flex-end;background-size:cover;background-position:center;background-color:#111}
+#offair-overlay.visible{display:flex}
+#offair-overlay::before{content:'';position:absolute;bottom:0;left:0;width:100%;height:60%;background:linear-gradient(0deg,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0) 100%);pointer-events:none}
+#offair-overlay .offair-content{position:relative;z-index:1;padding:20px 24px;opacity:0;transform:translateY(10px);animation:offair-enter 0.4s ease-out 0.1s forwards}
+@keyframes offair-enter{to{opacity:1;transform:translateY(0)}}
+#offair-overlay .offair-status{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+#offair-overlay .offair-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);animation:offair-pulse 2s ease-in-out infinite}
+@keyframes offair-pulse{0%,100%{opacity:0.4}50%{opacity:1}}
+#offair-overlay .offair-label{color:rgba(255,255,255,0.6);font-family:Inter,sans-serif;font-size:clamp(9px,1.5vmin,11px);font-weight:600;text-transform:uppercase;letter-spacing:2px}
+#offair-overlay .offair-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(14px,3vmin,20px);font-weight:600;margin-bottom:6px}
+#offair-overlay .offair-schedule{color:rgba(255,255,255,0.5);font-family:Inter,sans-serif;font-size:clamp(11px,1.8vmin,14px)}
+#offair-overlay .offair-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.3s,border-color 0.3s;backdrop-filter:blur(4px);z-index:2}
+#offair-overlay .offair-play:hover{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.5)}
+#offair-overlay .offair-play svg{width:24px;height:24px;fill:rgba(255,255,255,0.7);margin-left:3px}
+#offair-overlay.fade-out{opacity:0;transition:opacity 0.6s ease-out}
 #retry-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:45;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px)}
 #retry-overlay.visible{display:flex}
 #retry-overlay .retry-msg{color:#fff;font-family:Inter,sans-serif;font-size:clamp(13px,2.5vmin,18px);font-weight:500;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -75,7 +85,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
 <div id="player">
     <video id="vjs-player" class="video-js vjs-big-play-centered" playsinline controls preload="auto"></video>
-    <div id="offline-overlay"><div class="offline-msg" id="offline-msg">Sin señal disponible</div><button class="offline-retry-btn" id="offline-retry-btn">Reintentar</button></div>
+    <div id="offair-overlay"><div class="offair-play" id="offair-play"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div><div class="offair-content"><div class="offair-status"><div class="offair-dot"></div><span class="offair-label">FUERA DE EMISIÓN</span></div><div class="offair-msg" id="offair-msg"></div><div class="offair-schedule" id="offair-schedule"></div></div></div>
     <div id="retry-overlay"><div class="retry-msg"><div class="retry-spinner"></div><span>Reconectando...</span></div></div>
     <div id="ad-overlay"><video id="ad-video" playsinline></video><div class="ad-label" id="ad-label">Anuncio</div><div class="ad-click" id="ad-click"></div><div class="ad-skip disabled" id="ad-skip">Omitir en...</div></div>
     <div id="password-overlay"><div class="pw-box">
@@ -302,15 +312,19 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             videoEl.setAttribute('poster', config.poster.image);
         }
 
-        // Offline overlay config (preload image so it's ready when needed)
-        var offlineEl = document.getElementById('offline-overlay');
-        var offlineMsgEl = document.getElementById('offline-msg');
-        if (config.offline && config.offline.image) {
-            var offImg = new Image(); offImg.src = config.offline.image;
-            offlineEl.style.backgroundImage = "url('" + config.offline.image.replace(/'/g, "\\'") + "')";
+        // Off-air overlay config
+        var offairEl = document.getElementById('offair-overlay');
+        var offairMsgEl = document.getElementById('offair-msg');
+        var offairScheduleEl = document.getElementById('offair-schedule');
+        // Background: offline image > poster > dark
+        var offairBg = (config.offline && config.offline.image) ? config.offline.image
+                     : (config.type === 'tv' && config.poster && config.poster.image) ? config.poster.image : '';
+        if (offairBg) {
+            var offImg = new Image(); offImg.src = offairBg;
+            offairEl.style.backgroundImage = "url('" + offairBg.replace(/'/g, "\\'") + "')";
         }
         if (config.offline && config.offline.message) {
-            offlineMsgEl.textContent = config.offline.message;
+            offairMsgEl.textContent = config.offline.message;
         }
 
         // Password overlay — hide if not needed
@@ -474,9 +488,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
         }
 
-        // ─── Auto-retry on error (re-resolves JSON stream URL on each retry) ───
+        // ─── Off-air detection + error handling ───
         var retryCount = 0, maxRetries = 5;
+        var hasEverPlayed = false;
         var retryEl = document.getElementById('retry-overlay');
+        var offairPlayBtn = document.getElementById('offair-play');
+        var offairPollTimer = null;
+
         async function resolveStreamForRetry() {
             if (config.stream && config.stream.method !== 'direct' && config.stream.jsonUrl && config.stream.jsonPath) {
                 try {
@@ -495,66 +513,139 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             }
             return player.currentSources();
         }
-        // Unified error handler (single listener prevents overlapping retry logic)
-        var offlineRetryBtn = document.getElementById('offline-retry-btn');
-        var offlineRecheckTimer = null;
-        function attemptOfflineRecovery() {
-            offlineEl.classList.remove('visible');
+
+        // Show EPG next program in off-air overlay
+        function updateOffairSchedule() {
+            if (!(config.epg && config.epg.enabled && config.epg.schedule && config.epg.schedule.length)) return;
+            var now = new Date(), day = now.getDay(), mins = now.getHours() * 60 + now.getMinutes();
+            var schedule = config.epg.schedule;
+            var nextShow = null;
+            // Find next show today
+            for (var i = 0; i < schedule.length; i++) {
+                if (schedule[i].day === day && schedule[i].time) {
+                    var p = schedule[i].time.split(':');
+                    var startMins = parseInt(p[0]) * 60 + parseInt(p[1] || 0);
+                    if (startMins > mins) { nextShow = schedule[i]; break; }
+                }
+            }
+            // If none today, check tomorrow
+            if (!nextShow) {
+                var tmrw = (day + 1) % 7;
+                for (var j = 0; j < schedule.length; j++) {
+                    if (schedule[j].day === tmrw && schedule[j].time) { nextShow = schedule[j]; break; }
+                }
+                if (nextShow) {
+                    offairScheduleEl.textContent = 'Mañana: ' + (nextShow.title || '') + ' ' + (nextShow.time || '');
+                    return;
+                }
+            }
+            if (nextShow) {
+                offairScheduleEl.textContent = 'Próxima emisión: ' + (nextShow.title || '') + ' ' + (nextShow.time || '');
+            }
+        }
+
+        function showOffairState() {
+            retryCount = maxRetries;
+            retryEl.classList.remove('visible');
+            offairEl.classList.add('visible');
+            player.controls(false);
+            player.error(null);
+            updateOffairSchedule();
+            startOffairPoll();
+        }
+
+        // Silent background poll every 30s
+        function startOffairPoll() {
+            if (offairPollTimer) return;
+            offairPollTimer = setInterval(function() {
+                if (document.hidden || !offairEl.classList.contains('visible')) return;
+                resolveStreamForRetry().then(function(src) {
+                    if (src && src.length) {
+                        player.error(null);
+                        retryCount = 0;
+                        player.src(src);
+                        player.play();
+                    }
+                }).catch(function() {});
+            }, 30000);
+        }
+
+        // Manual retry via play button on off-air overlay
+        if (offairPlayBtn) offairPlayBtn.addEventListener('click', function() {
+            offairEl.classList.remove('visible');
             retryEl.classList.add('visible');
             player.error(null);
+            retryCount = 0;
             resolveStreamForRetry().then(function(src) {
                 retryEl.classList.remove('visible');
-                if (src && src.length) {
-                    retryCount = 0;
-                    player.src(src);
-                    player.play();
-                } else {
-                    offlineEl.classList.add('visible');
-                }
-            }).catch(function() {
-                retryEl.classList.remove('visible');
-                offlineEl.classList.add('visible');
-            });
+                if (src && src.length) { player.src(src); player.play(); }
+                else { showOffairState(); }
+            }).catch(function() { retryEl.classList.remove('visible'); showOffairState(); });
+        });
+
+        // ── INITIAL LOAD: 8-second deadline ──
+        // If stream doesn't fire 'playing' within 8s → off-air (no spinner shown)
+        var isOffair = !streamUrl;
+        if (isOffair) {
+            // No stream URL at all → off-air immediately
+            showOffairState();
+        } else {
+            // Stream URL exists → give Video.js 8s to connect
+            var firstPlayTimer = setTimeout(function() {
+                if (!hasEverPlayed) showOffairState();
+            }, 8000);
+            player.one('playing', function() { clearTimeout(firstPlayTimer); });
         }
-        if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptOfflineRecovery);
+
+        // ── ERROR HANDLER ──
         player.on('error', function() {
-            if (retryCount < maxRetries) {
+            // Different behavior: first visit vs stream drop
+            var maxTries = hasEverPlayed ? maxRetries : 2;
+            var delay = hasEverPlayed ? 5000 : 2000;
+            if (retryCount < maxTries) {
                 retryCount++;
-                retryEl.classList.add('visible');
+                if (hasEverPlayed) {
+                    retryEl.classList.add('visible');
+                }
                 setTimeout(async function() {
                     retryEl.classList.remove('visible');
                     player.error(null);
                     var src = await resolveStreamForRetry();
                     if (src && src.length) { player.src(src); player.play(); }
-                }, 5000);
+                    else { showOffairState(); }
+                }, delay);
             } else {
-                retryEl.classList.remove('visible');
-                offlineEl.classList.add('visible');
-                if (!offlineRecheckTimer) {
-                    offlineRecheckTimer = setInterval(function() {
-                        if (!offlineEl.classList.contains('visible')) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; return; }
-                        attemptOfflineRecovery();
-                    }, 30000);
-                }
+                showOffairState();
             }
         });
+
+        // ── PLAYING: universal recovery signal ──
         player.on('playing', function() {
+            hasEverPlayed = true;
             retryCount = 0;
             retryEl.classList.remove('visible');
-            offlineEl.classList.remove('visible');
-            if (offlineRecheckTimer) { clearInterval(offlineRecheckTimer); offlineRecheckTimer = null; }
+            if (offairEl.classList.contains('visible')) {
+                // Smooth crossfade from off-air to live
+                offairEl.classList.add('fade-out');
+                setTimeout(function() {
+                    offairEl.classList.remove('visible', 'fade-out');
+                }, 600);
+            }
+            player.controls(config.behavior ? config.behavior.controls !== false : true);
+            if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
         });
 
-        // Stall watchdog: if 'waiting' persists 30s without 'playing', trigger retry
+        // ── STALL WATCHDOG: 12s (not 30s) ──
         var stallTimer = null;
         player.on('waiting', function() {
+            if (!hasEverPlayed) return; // Initial load uses 8s deadline instead
             if (stallTimer) return;
             stallTimer = setTimeout(function() {
                 stallTimer = null;
-                if (!player.paused() && !player.ended()) {
+                if (player.readyState() <= 2 && !player.paused() && !player.ended()) {
                     player.error({ code: 4, message: 'Stream stalled' });
                 }
-            }, 30000);
+            }, 12000);
         });
         player.on('playing', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
         player.on('pause', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
