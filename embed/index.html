@@ -569,7 +569,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             isInOffairState = false;
                             retryCount = 0;
                             player.error(null);
+                            player.autoplay(false);
                             player.src(src);
+                            player.pause();
                             player.hasStarted(false); // keep poster visible
                             offairBar.classList.remove('visible');
                             player.el().classList.remove('vjs-offair');
