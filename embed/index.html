@@ -472,6 +472,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // ─── Off-air detection + error handling ───
         var retryCount = 0, maxRetries = 5;
         var hasEverPlayed = false;
+        var isInOffairState = false;
         var offairLabelEl = document.getElementById('offair-label');
         var offairPollTimer = null;
         // Save original sources so we can retry after src([]) clears them
@@ -528,6 +529,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         }
 
         function showOffairState() {
+            isInOffairState = true;
             retryCount = maxRetries;
             offairLabelEl.textContent = 'Fuera de emisión';
             offairBar.classList.add('visible');
@@ -556,6 +558,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         player.error(null);
                         retryCount = 0;
                         // Remove off-air state BEFORE playing to prevent play handler conflict
+                        isInOffairState = false;
                         player.el().classList.remove('vjs-offair');
                         offairBar.classList.remove('visible');
                         player.src(src);
@@ -571,9 +574,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var bigBtn = player.el().querySelector('.vjs-big-play-button');
             if (bigBtn) {
                 bigBtn.addEventListener('click', function(e) {
-                    if (!player.el().classList.contains('vjs-offair')) return;
+                    if (!isInOffairState) return; // Only intercept when truly in off-air, not during init
                     e.stopImmediatePropagation();
                     e.preventDefault();
+                    isInOffairState = false;
                     player.el().classList.remove('vjs-offair');
                     offairBar.classList.remove('visible');
                     retryCount = 0;
@@ -629,6 +633,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         player.on('playing', function() {
             hasEverPlayed = true;
             retryCount = 0;
+            isInOffairState = false;
             offairBar.classList.remove('visible');
             player.el().classList.remove('vjs-offair');
             if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
