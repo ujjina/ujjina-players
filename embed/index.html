@@ -1085,11 +1085,15 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 // ── MID-ROLL: fetch + play after X minutes of watch time (recurring for 24/7) ──
                 if (midroll && midrollTime > 0) {
                     var watchedTime = 0, watchStart = 0;
-                    player.on('play', function() { if (!watchStart) watchStart = Date.now(); });
-                    player.on('pause', function() { if (watchStart) { watchedTime += (Date.now() - watchStart) / 1000; watchStart = 0; } });
+                    player.on('play', function() { if (!watchStart) watchStart = performance.now(); });
+                    player.on('pause', function() { if (watchStart) { watchedTime += (performance.now() - watchStart) / 1000; watchStart = 0; } });
+                    document.addEventListener('visibilitychange', function() {
+                        if (document.hidden && watchStart) { watchedTime += (performance.now() - watchStart) / 1000; watchStart = 0; }
+                        else if (!document.hidden && !player.paused()) { watchStart = performance.now(); }
+                    });
                     player.on('timeupdate', function() {
                         if (midrollFired || adPlaying || !prerollDone) return;
-                        var total = watchedTime + (watchStart ? (Date.now() - watchStart) / 1000 : 0);
+                        var total = watchedTime + (watchStart ? (performance.now() - watchStart) / 1000 : 0);
                         if (total >= midrollTime) {
                             midrollFired = true;
                             // User already interacted — no need to mute
@@ -1106,7 +1110,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                             midrollShown = true;
                                             showAd(data, function() {
                                                 // Reset for next mid-roll (recurring for 24/7 streams)
-                                                watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                                watchedTime = 0; watchStart = performance.now(); midrollFired = false;
                                                 safePlay();
                                             });
                                         }, { once: true });
@@ -1114,17 +1118,17 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                                             if (!midrollShown) {
                                                 midrollShown = true;
                                                 // Ad failed to load — reset for next cycle
-                                                watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                                watchedTime = 0; watchStart = performance.now(); midrollFired = false;
                                             }
                                         }, 8000);
                                     } else {
                                         // No valid VAST — reset for next cycle
-                                        watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                        watchedTime = 0; watchStart = performance.now(); midrollFired = false;
                                     }
                                 })
                                 .catch(function() {
                                     // Fetch failed — reset for next cycle
-                                    watchedTime = 0; watchStart = Date.now(); midrollFired = false;
+                                    watchedTime = 0; watchStart = performance.now(); midrollFired = false;
                                 });
                         }
                     });
@@ -1163,6 +1167,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var heartbeatTimer = setInterval(function() {
                 if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = Date.now(); }
                 var deltaDur = dur - lastSentDur;
+                if (deltaDur < 1 && bufCount === 0 && errCount === 0) return;
                 lastSentDur = dur;
                 send('heartbeat', { d: Math.round(deltaDur) });
                 bufCount = 0; bufMs = 0; errCount = 0;
