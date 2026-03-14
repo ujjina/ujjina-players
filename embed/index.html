@@ -356,14 +356,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var nextShow = null;
             for (var si = 0; si < config.epg.schedule.length; si++) {
                 var sh = config.epg.schedule[si];
-                if (sh.time) {
-                    var sp = sh.time.split(':');
+                if (sh.start) {
+                    var sp = sh.start.split(':');
                     var startMins = parseInt(sp[0]) * 60 + parseInt(sp[1] || 0);
                     if (startMins > nowMins && !nextShow) nextShow = sh;
                 }
             }
             if (nextShow) {
-                offairScheduleEl.textContent = 'Próxima emisión: ' + (nextShow.title || '') + ' ' + (nextShow.time || '');
+                offairScheduleEl.textContent = 'Próxima emisión: ' + (nextShow.title || '') + ' ' + (nextShow.start || '');
             }
         }
 
