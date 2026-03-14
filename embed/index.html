@@ -626,10 +626,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         }
         if (offlineRetryBtn) offlineRetryBtn.addEventListener('click', attemptRecovery);
         player.on('error', function() {
-            // Always retry — then show off-air if all retries fail
-            if (retryCount < maxRetries) {
+            // Different behavior: first visit vs stream drop
+            var maxTries = hasEverPlayed ? maxRetries : 2; // 2 quick tries if never played, 5 if was playing
+            var delay = hasEverPlayed ? 5000 : 2000; // 2s quick tries vs 5s reconnect
+            if (retryCount < maxTries) {
                 retryCount++;
-                offlineMsgEl.textContent = 'Reconectando... (' + retryCount + '/' + maxRetries + ')';
+                if (hasEverPlayed) {
+                    offlineMsgEl.textContent = 'Reconectando... (' + retryCount + '/' + maxTries + ')';
+                }
                 retryEl.classList.add('visible');
                 setTimeout(async function() {
                     retryEl.classList.remove('visible');
@@ -637,9 +641,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     var src = await resolveStreamForRetry();
                     if (src && src.length) { player.src(src); player.play(); }
                     else { showOffairState(); }
-                }, hasEverPlayed ? 5000 : 3000);
+                }, delay);
             } else {
-                // All retries exhausted — show elegant off-air (not ugly error)
+                // Show elegant off-air state
                 showOffairState();
             }
         });
