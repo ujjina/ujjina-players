@@ -548,24 +548,33 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             offairBar.classList.add('visible');
         }
 
-        // Silent background poll every 15s — try to auto-recover
+        // Silent background poll — try to auto-recover using recursive setTimeout (no overlap)
         function startOffairPoll() {
             if (offairPollTimer) return;
-            offairPollTimer = setInterval(function() {
-                if (document.hidden || !offairBar.classList.contains('visible')) return;
-                resolveStreamForRetry().then(function(src) {
-                    if (src && src.length) {
-                        player.error(null);
-                        retryCount = 0;
-                        // Remove off-air state BEFORE playing to prevent play handler conflict
-                        isInOffairState = false;
-                        player.el().classList.remove('vjs-offair');
-                        offairBar.classList.remove('visible');
-                        player.src(src);
-                        player.play();
-                    }
-                }).catch(function() {});
-            }, 15000);
+            function pollOnce() {
+                offairPollTimer = setTimeout(function() {
+                    offairPollTimer = null;
+                    if (!isInOffairState) return; // recovered, stop
+                    if (document.hidden) { startOffairPoll(); return; } // tab hidden, schedule next
+                    resolveStreamForRetry().then(function(src) {
+                        if (!isInOffairState) return; // recovered while resolving
+                        if (src && src.length) {
+                            // Attempt to play — if fails, error handler → showOffairState → restarts poll
+                            // If succeeds, playing handler clears everything
+                            isInOffairState = false;
+                            retryCount = 0;
+                            player.error(null);
+                            player.el().classList.remove('vjs-offair');
+                            offairBar.classList.remove('visible');
+                            player.src(src);
+                            player.play();
+                        } else {
+                            startOffairPoll(); // no source available, try again later
+                        }
+                    }).catch(function() { startOffairPoll(); });
+                }, 15000);
+            }
+            pollOnce();
         }
 
         // Big play button = retry when in off-air state
@@ -636,7 +645,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             isInOffairState = false;
             offairBar.classList.remove('visible');
             player.el().classList.remove('vjs-offair');
-            if (offairPollTimer) { clearInterval(offairPollTimer); offairPollTimer = null; }
+            if (offairPollTimer) { clearTimeout(offairPollTimer); offairPollTimer = null; }
         });
 
         // ── STALL WATCHDOG: 12s (not 30s) ──
