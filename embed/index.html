@@ -548,7 +548,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             isRecovering = false;
             retryCount = maxRetries;
             offairPollDelay = 5000; // reset backoff for fast initial detection
-            offairLabelEl.textContent = 'Fuera de emisión';
+            // Use custom offline message/image if configured
+            var offMsg = (config.offline && config.offline.message) ? config.offline.message : 'Fuera de emisión';
+            offairLabelEl.textContent = offMsg;
+            if (config.offline && config.offline.image) {
+                var videoEl = document.getElementById('vjs-player');
+                if (videoEl) videoEl.setAttribute('poster', config.offline.image);
+            }
             offairBar.classList.add('visible');
             player.error(null);
             player.pause(); // triggers equalizer pause handler
