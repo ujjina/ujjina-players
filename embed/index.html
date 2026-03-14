@@ -277,6 +277,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
     }
 
     function renderPlayer(config, streamUrl, vttText) {
+        // Safe play helper — handles autoplay rejection by muting and retrying
+        function safePlay() { var p = player.play(); if (p && p.catch) p.catch(function() { player.muted(true); player.play(); }); }
+
         // Hide loading, show player container
         document.getElementById('loading').style.display = 'none';
         document.getElementById('player').style.display = 'block';
@@ -1004,7 +1007,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
                 // ── Intercept play or handle autoplay ──
                 var prerollDone = false;
-                function safePlay() { var p = player.play(); if (p && p.catch) p.catch(function() { player.muted(true); player.play(); }); }
 
                 function startPreroll(fromUserGesture) {
                     if (prerollDone) return;
