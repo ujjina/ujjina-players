@@ -475,10 +475,34 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         var retryCount = 0, maxRetries = 5;
         var hasEverPlayed = false;
         var isInOffairState = false;
+        var isRecovering = false; // mutex to prevent poll+click race condition
         var offairLabelEl = document.getElementById('offair-label');
         var offairPollTimer = null;
+        var offairPollDelay = 5000; // start fast, back off to 30s
         // Save original sources so we can retry after src([]) clears them
         var originalSources = streamUrl ? [{ src: streamUrl, type: detectMime(streamUrl) }] : [];
+
+        // CORS-safe stream availability check — works even if CDN blocks fetch CORS
+        function checkStreamAvailable(url) {
+            var ctrl = new AbortController();
+            var t = setTimeout(function() { ctrl.abort(); }, 8000);
+            return fetch(url, { method: 'HEAD', signal: ctrl.signal }).then(function(r) {
+                clearTimeout(t);
+                return r.ok;
+            }).catch(function() {
+                clearTimeout(t);
+                // CORS blocked on HEAD — try no-cors (opaque = server responded = stream exists)
+                var ctrl2 = new AbortController();
+                var t2 = setTimeout(function() { ctrl2.abort(); }, 8000);
+                return fetch(url, { mode: 'no-cors', signal: ctrl2.signal }).then(function() {
+                    clearTimeout(t2);
+                    return true; // opaque response = server is up
+                }).catch(function() {
+                    clearTimeout(t2);
+                    return false; // genuine network failure
+                });
+            });
+        }
 
         async function resolveStreamForRetry() {
             if (config.stream && config.stream.method !== 'direct' && config.stream.jsonUrl && config.stream.jsonPath) {
@@ -532,7 +556,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
         function showOffairState() {
             isInOffairState = true;
+            isRecovering = false;
             retryCount = maxRetries;
+            offairPollDelay = 5000; // reset backoff for fast initial detection
             offairLabelEl.textContent = 'Fuera de emisión';
             offairBar.classList.add('visible');
             player.error(null);
@@ -553,6 +579,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
         // Silent background poll — check if stream is available (NO autoplay)
         // Just removes off-air message and prepares player. User clicks play when ready.
+        // Uses adaptive backoff: 5s → 7.5s → 11s → ... → 30s max
         function startOffairPoll() {
             if (offairPollTimer) return;
             offairPollTimer = setTimeout(function() {
@@ -561,15 +588,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 if (document.hidden) { startOffairPoll(); return; }
                 resolveStreamForRetry().then(function(src) {
                     if (!isInOffairState || !src || !src.length) { startOffairPoll(); return; }
-                    // Check if stream URL responds (no autoplay, just check availability)
-                    var checkCtrl = new AbortController();
-                    var checkTimeout = setTimeout(function() { checkCtrl.abort(); }, 8000);
-                    fetch(src[0].src, { signal: checkCtrl.signal }).then(function(r) {
-                        clearTimeout(checkTimeout);
+                    // CORS-safe availability check
+                    checkStreamAvailable(src[0].src).then(function(available) {
                         if (!isInOffairState) return;
-                        if (r.ok) {
+                        if (available) {
                             // Stream is available — prepare player, remove off-air (NO autoplay)
                             isInOffairState = false;
+                            isRecovering = true;
                             retryCount = 0;
                             player.error(null);
                             player.autoplay(false);
@@ -578,16 +603,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             player.hasStarted(false); // keep poster visible
                             offairBar.classList.remove('visible');
                             player.el().classList.remove('vjs-offair');
-                            // Player now shows poster + play button, user clicks when ready
+                            isRecovering = false;
                         } else {
+                            offairPollDelay = Math.min(offairPollDelay * 1.5, 30000);
                             startOffairPoll();
                         }
-                    }).catch(function() {
-                        clearTimeout(checkTimeout);
-                        startOffairPoll();
                     });
                 }).catch(function() { startOffairPoll(); });
-            }, 15000);
+            }, offairPollDelay);
         }
 
         // Big play button = retry when in off-air state
@@ -596,55 +619,43 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             var bigBtn = player.el().querySelector('.vjs-big-play-button');
             if (bigBtn) {
                 bigBtn.addEventListener('click', function(e) {
-                    if (!isInOffairState) return; // Only intercept when truly in off-air, not during init
+                    if (!isInOffairState || isRecovering) return; // Only intercept when truly in off-air
                     e.stopImmediatePropagation();
                     e.preventDefault();
                     isInOffairState = false;
+                    isRecovering = true;
                     player.el().classList.remove('vjs-offair');
                     offairBar.classList.remove('visible');
+                    if (offairPollTimer) { clearTimeout(offairPollTimer); offairPollTimer = null; }
                     resolveStreamForRetry().then(function(src) {
-                        if (src && src.length) {
-                            player.autoplay(false);
-                            player.src(src);
-                            player.play(); // user explicitly clicked, so play
-                        } else {
-                            showOffairState();
-                        }
-                    }).catch(function() { showOffairState(); });
+                        if (!src || !src.length) { isRecovering = false; showOffairState(); return; }
+                        player.error(null);
+                        player.autoplay(false);
+                        player.src(src);
+                        player.play(); // user explicitly clicked, so play
+                        isRecovering = false;
+                    }).catch(function() { isRecovering = false; showOffairState(); });
                 }, true);
             }
         });
 
-        // ── INITIAL LOAD: check stream availability via fetch (no autoplay) ──
+        // ── INITIAL LOAD: check stream availability via CORS-safe fetch (no autoplay) ──
         if (!streamUrl) {
-            // No stream URL at all → off-air immediately
             showOffairState();
         } else {
-            // Stream URL exists → check if it's reachable
-            var initCtrl = new AbortController();
-            var initTimeout = setTimeout(function() { initCtrl.abort(); }, 8000);
-            fetch(streamUrl, { signal: initCtrl.signal }).then(function(r) {
-                clearTimeout(initTimeout);
-                if (r.ok) {
-                    // Stream is available — remove vjs-offair, show normal poster + play
+            checkStreamAvailable(streamUrl).then(function(available) {
+                if (available) {
                     player.el().classList.remove('vjs-offair');
-                    // Player already has the source set, user clicks play when ready
                 } else {
-                    // Stream URL exists but server says no → off-air
                     showOffairState();
                 }
-            }).catch(function() {
-                clearTimeout(initTimeout);
-                // Network error / CORS / timeout → off-air
-                showOffairState();
             });
         }
 
         // ── ERROR HANDLER ──
         player.on('error', function() {
-            if (isInOffairState) return; // already in off-air, ignore
+            if (isInOffairState || isRecovering) return; // already in off-air or mid-recovery
             // Stream error → go to off-air. No automatic retries/autoplay.
-            // The poll will detect when stream comes back. User clicks play.
             showOffairState();
         });
 
@@ -653,6 +664,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             hasEverPlayed = true;
             retryCount = 0;
             isInOffairState = false;
+            isRecovering = false;
             offairBar.classList.remove('visible');
             player.el().classList.remove('vjs-offair');
             if (offairPollTimer) { clearTimeout(offairPollTimer); offairPollTimer = null; }
@@ -661,17 +673,23 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // ── STALL WATCHDOG: 12s (not 30s) ──
         var stallTimer = null;
         player.on('waiting', function() {
-            if (!hasEverPlayed) return; // Initial load uses 8s deadline instead
+            if (!hasEverPlayed) return;
             if (stallTimer) return;
             stallTimer = setTimeout(function() {
                 stallTimer = null;
-                if (player.readyState() <= 2 && !player.paused() && !player.ended()) {
+                var adOverlayEl = document.getElementById('ad-overlay');
+                var adActive = adOverlayEl && adOverlayEl.classList.contains('visible');
+                if (player.readyState() <= 2 && !player.paused() && !player.ended() && !document.hidden && !adActive) {
                     player.error({ code: 4, message: 'Stream stalled' });
                 }
             }, 12000);
         });
         player.on('playing', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
         player.on('pause', function() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } });
+        // Cancel stall watchdog when tab is hidden (browsers throttle timers + pause media)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+        });
 
         // ─── Quality selector ───
         (function() {
@@ -862,7 +880,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     else { if (sep) sep.style.display = ''; if (labels[1]) labels[1].style.display = ''; if (nxtEl) nxtEl.style.display = ''; }
                 }
                 upd();
-                setInterval(upd, 60000);
+                var epgTimer = setInterval(upd, 60000);
+                player.on('dispose', function() { clearInterval(epgTimer); });
             })();
         }
 
@@ -952,7 +971,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         endAd();
                     };
 
+                    var adEnded = false;
                     function endAd() {
+                        if (adEnded) return; // guard against double-call (skip + onended)
+                        adEnded = true;
                         if (skipInterval) clearInterval(skipInterval);
                         adPlaying = false;
                         adOverlay.classList.remove('visible');
@@ -1067,8 +1089,10 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     }, 10000);
                 }
 
-                // Manual play: intercept first play event
-                player.one('play', function() {
+                // Manual play: intercept first play event (use .on + prerollDone flag, not .one,
+                // because .one is consumed if first play triggers off-air → ads never show)
+                player.on('play', function() {
+                    if (prerollDone) return;
                     startPreroll(true);
                 });
 
@@ -1157,6 +1181,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 send('heartbeat', { d: Math.round(deltaDur) });
                 bufCount = 0; bufMs = 0; errCount = 0;
             }, 300000);
+            player.on('dispose', function() { clearInterval(heartbeatTimer); });
             window.addEventListener('beforeunload', function() {
                 clearInterval(heartbeatTimer);
                 if (playStart) { dur += (Date.now() - playStart) / 1000; }
