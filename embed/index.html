@@ -548,33 +548,41 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             offairBar.classList.add('visible');
         }
 
-        // Silent background poll — try to auto-recover using recursive setTimeout (no overlap)
+        // Silent background poll — check if stream is available (NO autoplay)
+        // Just removes off-air message and prepares player. User clicks play when ready.
         function startOffairPoll() {
             if (offairPollTimer) return;
-            function pollOnce() {
-                offairPollTimer = setTimeout(function() {
-                    offairPollTimer = null;
-                    if (!isInOffairState) return; // recovered, stop
-                    if (document.hidden) { startOffairPoll(); return; } // tab hidden, schedule next
-                    resolveStreamForRetry().then(function(src) {
-                        if (!isInOffairState) return; // recovered while resolving
-                        if (src && src.length) {
-                            // Attempt to play — if fails, error handler → showOffairState → restarts poll
-                            // If succeeds, playing handler clears everything
+            offairPollTimer = setTimeout(function() {
+                offairPollTimer = null;
+                if (!isInOffairState) return;
+                if (document.hidden) { startOffairPoll(); return; }
+                resolveStreamForRetry().then(function(src) {
+                    if (!isInOffairState || !src || !src.length) { startOffairPoll(); return; }
+                    // Check if stream URL responds (no autoplay, just check availability)
+                    var checkCtrl = new AbortController();
+                    var checkTimeout = setTimeout(function() { checkCtrl.abort(); }, 8000);
+                    fetch(src[0].src, { signal: checkCtrl.signal }).then(function(r) {
+                        clearTimeout(checkTimeout);
+                        if (!isInOffairState) return;
+                        if (r.ok) {
+                            // Stream is available — prepare player, remove off-air (NO autoplay)
                             isInOffairState = false;
                             retryCount = 0;
                             player.error(null);
-                            player.el().classList.remove('vjs-offair');
-                            offairBar.classList.remove('visible');
                             player.src(src);
-                            player.play();
+                            player.hasStarted(false); // keep poster visible
+                            offairBar.classList.remove('visible');
+                            player.el().classList.remove('vjs-offair');
+                            // Player now shows poster + play button, user clicks when ready
                         } else {
-                            startOffairPoll(); // no source available, try again later
+                            startOffairPoll();
                         }
-                    }).catch(function() { startOffairPoll(); });
-                }, 15000);
-            }
-            pollOnce();
+                    }).catch(function() {
+                        clearTimeout(checkTimeout);
+                        startOffairPoll();
+                    });
+                }).catch(function() { startOffairPoll(); });
+            }, 15000);
         }
 
         // Big play button = retry when in off-air state
