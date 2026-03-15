@@ -1286,7 +1286,15 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             player.one('playing', function() { ttff = Date.now() - loadStart; });
             player.on('waiting', function() { if (!bufStart) bufStart = Date.now(); });
             player.on('playing', function() { if (bufStart) { bufMs += Date.now() - bufStart; bufCount++; bufStart = 0; } });
-            player.on('error', function() { errCount++; if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
+            // Debounce errors — Video.js fires multiple error events for a single failure
+            var lastErrTime = 0;
+            player.on('error', function() {
+                var now = Date.now();
+                if (now - lastErrTime < 1000) return;
+                lastErrTime = now;
+                errCount++;
+                if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; }
+            });
             if (player.qualityLevels) {
                 var ql = player.qualityLevels();
                 ql.on('change', function() { var active = ql[ql.selectedIndex]; if (active && active.height) quality = active.height + 'p'; });
@@ -1308,8 +1316,12 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
             function send(type, extra) {
                 var data = { uid: uid, pid: pid, sid: sid, t: type, d: Math.round(dur), buf: bufCount, bufMs: Math.round(bufMs), err: errCount, ttff: Math.round(ttff), q: quality, ref: ref, token: analyticsToken };
                 if (extra) for (var k in extra) data[k] = extra[k];
-                try { navigator.sendBeacon(ANALYTICS_URL, JSON.stringify(data)); } catch (e) {
-                    try { fetch(ANALYTICS_URL, { method: 'POST', body: JSON.stringify(data), keepalive: true, headers: { 'Content-Type': 'application/json' } }); } catch (e2) {}
+                var payload = JSON.stringify(data);
+                // sendBeacon returns false if queuing fails (e.g. payload too large or page unloading)
+                var sent = false;
+                try { sent = navigator.sendBeacon(ANALYTICS_URL, payload); } catch (e) {}
+                if (!sent) {
+                    try { fetch(ANALYTICS_URL, { method: 'POST', body: payload, keepalive: true, headers: { 'Content-Type': 'application/json' } }); } catch (e2) {}
                 }
             }
 
@@ -1339,11 +1351,19 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 if (Date.now() > tokenExpiry) { refreshToken().then(doSend); } else { doSend(); }
             }, 300000);
             player.on('dispose', function() { clearInterval(heartbeatTimer); });
-            window.addEventListener('beforeunload', function() {
+            var endSent = false;
+            function sendEnd() {
+                if (endSent) return;
+                endSent = true;
                 clearInterval(heartbeatTimer);
-                if (playStart) { dur += (Date.now() - playStart) / 1000; }
+                if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; }
+                // Close active buffer if user leaves mid-buffer
+                if (bufStart) { bufMs += Date.now() - bufStart; bufCount++; bufStart = 0; }
                 send('end', { d: Math.round(dur - lastSentDur) });
-            });
+            }
+            window.addEventListener('beforeunload', sendEnd);
+            // pagehide fires in bfcache scenarios where beforeunload doesn't
+            window.addEventListener('pagehide', sendEnd);
         })();
     }
 })();
