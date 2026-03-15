@@ -1302,7 +1302,7 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             tokenExpiry = Date.now() + 50 * 60 * 1000;
                         }
                     })
-                    .catch(function() {});
+                    .catch(function(err) { console.warn('Analytics token fetch failed:', err); });
             }
 
             function send(type, extra) {
@@ -1320,6 +1320,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
             player.on('play', function() { playStart = Date.now(); });
             player.on('pause', function() { if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
+            // Pause watch time accumulation when tab hidden (prevents inflated stats)
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; }
+                } else {
+                    if (!player.paused()) { playStart = Date.now(); }
+                }
+            });
             var lastSentDur = 0;
             var heartbeatTimer = setInterval(function() {
                 if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = Date.now(); }
