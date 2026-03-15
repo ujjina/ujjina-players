@@ -900,7 +900,29 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 function parseVAST(xml) {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(xml, 'application/xml');
-                    var result = { mediaUrl: null, skipOffset: 0, clickUrl: null };
+                    var result = { mediaUrl: null, skipOffset: 0, clickUrl: null, impressionUrls: [], trackingEvents: {} };
+                    // Impression pixels
+                    doc.querySelectorAll('Impression').forEach(function(el) {
+                        var u = (el.textContent || '').trim();
+                        if (u) result.impressionUrls.push(u);
+                    });
+                    // Tracking events (start, firstQuartile, midpoint, thirdQuartile, complete)
+                    doc.querySelectorAll('Tracking').forEach(function(el) {
+                        var ev = (el.getAttribute('event') || '').trim();
+                        var u = (el.textContent || '').trim();
+                        if (ev && u) {
+                            if (!result.trackingEvents[ev]) result.trackingEvents[ev] = [];
+                            result.trackingEvents[ev].push(u);
+                        }
+                    });
+                    // ClickTracking
+                    doc.querySelectorAll('ClickTracking').forEach(function(el) {
+                        var u = (el.textContent || '').trim();
+                        if (u) {
+                            if (!result.trackingEvents.clickTracking) result.trackingEvents.clickTracking = [];
+                            result.trackingEvents.clickTracking.push(u);
+                        }
+                    });
                     var clickEl = doc.querySelector('ClickThrough');
                     if (clickEl) result.clickUrl = (clickEl.textContent || '').trim();
                     var linear = doc.querySelector('Linear');
@@ -928,6 +950,14 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     return result;
                 }
 
+                // Fire tracking pixel(s) — fire-and-forget via Image beacon
+                function firePixels(urls) {
+                    if (!urls || !urls.length) return;
+                    urls.forEach(function(u) {
+                        if (u && /^https?:\/\//i.test(u)) { new Image().src = u; }
+                    });
+                }
+
                 function showAd(data, onDone) {
                     if (!data || !data.mediaUrl) { onDone(); return; }
                     adPlaying = true;
@@ -935,14 +965,19 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     player.controls(false);
                     adOverlay.classList.add('visible');
 
+                    // Fire Impression pixels
+                    firePixels(data.impressionUrls);
+
                     var skipTime = data.skipOffset || 0;
                     var skipReady = skipTime <= 0;
                     adSkip.className = 'ad-skip' + (skipReady ? '' : ' disabled');
                     adSkip.textContent = skipReady ? 'Omitir anuncio \u25B6' : 'Omitir en ' + skipTime + 's';
 
                     var clickUrl = data.clickUrl;
+                    var trackingEvents = data.trackingEvents || {};
                     adClick.onclick = function() {
                         if (clickUrl && /^https?:\/\//i.test(clickUrl)) window.open(clickUrl, '_blank');
+                        firePixels(trackingEvents.clickTracking);
                     };
 
                     var skipInterval = null;
@@ -980,8 +1015,36 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                         onDone();
                     }
 
-                    adVideo.onended = endAd;
+                    adVideo.onended = function() {
+                        firePixels(trackingEvents.complete);
+                        endAd();
+                    };
                     adVideo.onerror = function() { endAd(); };
+
+                    // Quartile tracking (start, 25%, 50%, 75%)
+                    var quartilesFired = {};
+                    adVideo.ontimeupdate = function() {
+                        var dur = adVideo.duration;
+                        var cur = adVideo.currentTime;
+                        if (!dur || dur <= 0) return;
+                        var pct = cur / dur;
+                        if (!quartilesFired.start && cur > 0.5) {
+                            quartilesFired.start = true;
+                            firePixels(trackingEvents.start);
+                        }
+                        if (!quartilesFired.firstQuartile && pct >= 0.25) {
+                            quartilesFired.firstQuartile = true;
+                            firePixels(trackingEvents.firstQuartile);
+                        }
+                        if (!quartilesFired.midpoint && pct >= 0.5) {
+                            quartilesFired.midpoint = true;
+                            firePixels(trackingEvents.midpoint);
+                        }
+                        if (!quartilesFired.thirdQuartile && pct >= 0.75) {
+                            quartilesFired.thirdQuartile = true;
+                            firePixels(trackingEvents.thirdQuartile);
+                        }
+                    };
 
                     // Play ad — called synchronously from user gesture chain
                     adVideo.play().catch(function() {
