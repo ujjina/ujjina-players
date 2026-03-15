@@ -1024,9 +1024,6 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                     player.controls(false);
                     adOverlay.classList.add('visible');
 
-                    // Fire Impression pixels
-                    firePixels(data.impressionUrls);
-
                     var skipTime = data.skipOffset || 0;
                     var skipReady = skipTime <= 0;
                     adSkip.className = 'ad-skip' + (skipReady ? '' : ' disabled');
@@ -1082,11 +1079,16 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
 
                     // Quartile tracking (start, 25%, 50%, 75%)
                     var quartilesFired = {};
+                    var impressionFired = false;
                     adVideo.ontimeupdate = function() {
                         var dur = adVideo.duration;
                         var cur = adVideo.currentTime;
                         if (!dur || dur <= 0) return;
                         var pct = cur / dur;
+                        if (!impressionFired && cur > 0) {
+                            impressionFired = true;
+                            firePixels(data.impressionUrls);
+                        }
                         if (!quartilesFired.start && cur > 0.5) {
                             quartilesFired.start = true;
                             firePixels(trackingEvents.start);
