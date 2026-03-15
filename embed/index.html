@@ -897,10 +897,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 var prerollData = null;
                 var prerollReady = false;
 
-                function parseVAST(xml) {
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(xml, 'application/xml');
-                    var result = { mediaUrl: null, skipOffset: 0, clickUrl: null, impressionUrls: [], trackingEvents: {} };
+                // Parse a single VAST XML document (one level)
+                function parseVASTDoc(doc, result) {
                     // Impression pixels
                     doc.querySelectorAll('Impression').forEach(function(el) {
                         var u = (el.textContent || '').trim();
@@ -923,10 +921,12 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             result.trackingEvents.clickTracking.push(u);
                         }
                     });
-                    var clickEl = doc.querySelector('ClickThrough');
-                    if (clickEl) result.clickUrl = (clickEl.textContent || '').trim();
+                    if (!result.clickUrl) {
+                        var clickEl = doc.querySelector('ClickThrough');
+                        if (clickEl) result.clickUrl = (clickEl.textContent || '').trim();
+                    }
                     var linear = doc.querySelector('Linear');
-                    if (linear) {
+                    if (linear && !result.skipOffset) {
                         var skip = linear.getAttribute('skipoffset');
                         if (skip) {
                             var parts = skip.split(':');
@@ -935,19 +935,78 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             else result.skipOffset = parseInt(skip) || 0;
                         }
                     }
-                    var mediaFiles = doc.querySelectorAll('MediaFile');
-                    for (var i = 0; i < mediaFiles.length; i++) {
-                        var type = (mediaFiles[i].getAttribute('type') || '').toLowerCase();
-                        var url = (mediaFiles[i].textContent || '').trim();
-                        if (url && (type.indexOf('mp4') !== -1 || type.indexOf('video') !== -1)) {
-                            result.mediaUrl = url;
-                            break;
+                    if (!result.mediaUrl) {
+                        var mediaFiles = doc.querySelectorAll('MediaFile');
+                        for (var i = 0; i < mediaFiles.length; i++) {
+                            var type = (mediaFiles[i].getAttribute('type') || '').toLowerCase();
+                            var url = (mediaFiles[i].textContent || '').trim();
+                            if (url && (type.indexOf('mp4') !== -1 || type.indexOf('video') !== -1)) {
+                                result.mediaUrl = url;
+                                break;
+                            }
+                        }
+                        if (!result.mediaUrl && mediaFiles.length > 0) {
+                            result.mediaUrl = (mediaFiles[0].textContent || '').trim();
                         }
                     }
-                    if (!result.mediaUrl && mediaFiles.length > 0) {
-                        result.mediaUrl = (mediaFiles[0].textContent || '').trim();
+                }
+
+                // Parse VAST XML, following Wrapper chains (max 5 levels)
+                function parseVAST(xml) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(xml, 'application/xml');
+                    var result = { mediaUrl: null, skipOffset: 0, clickUrl: null, impressionUrls: [], trackingEvents: {} };
+                    parseVASTDoc(doc, result);
+
+                    // Check for Wrapper → VASTAdTagURI (redirect chain)
+                    var wrapperUri = doc.querySelector('VASTAdTagURI');
+                    if (wrapperUri) {
+                        var nextUrl = (wrapperUri.textContent || '').trim();
+                        if (nextUrl) {
+                            result._wrapperUrl = nextUrl;
+                        }
                     }
                     return result;
+                }
+
+                // Follow VAST wrapper chain: fetch each level, accumulate tracking, return final result
+                function resolveVAST(initialXml) {
+                    return new Promise(function(resolve) {
+                        var result = parseVAST(initialXml);
+                        var depth = 0;
+                        var MAX_DEPTH = 5;
+
+                        function followWrapper() {
+                            if (!result._wrapperUrl || depth >= MAX_DEPTH) {
+                                delete result._wrapperUrl;
+                                resolve(result);
+                                return;
+                            }
+                            depth++;
+                            var nextUrl = result._wrapperUrl;
+                            delete result._wrapperUrl;
+                            fetch(PROXY + encodeURIComponent(nextUrl))
+                                .then(function(r) { return r.text(); })
+                                .then(function(xml) {
+                                    var parser = new DOMParser();
+                                    var doc = parser.parseFromString(xml, 'application/xml');
+                                    parseVASTDoc(doc, result);
+                                    // Check for another wrapper level
+                                    var nextWrapper = doc.querySelector('VASTAdTagURI');
+                                    if (nextWrapper) {
+                                        var uri = (nextWrapper.textContent || '').trim();
+                                        if (uri) result._wrapperUrl = uri;
+                                    }
+                                    followWrapper();
+                                })
+                                .catch(function() {
+                                    // Wrapper fetch failed — use what we have so far
+                                    delete result._wrapperUrl;
+                                    resolve(result);
+                                });
+                        }
+                        followWrapper();
+                    });
                 }
 
                 // Fire tracking pixel(s) — fire-and-forget via Image beacon
@@ -1057,8 +1116,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 // This runs as soon as renderPlayer executes (before user clicks play)
                 fetch(PROXY + encodeURIComponent(vastUrl))
                     .then(function(r) { return r.text(); })
-                    .then(function(xml) {
-                        var data = parseVAST(xml);
+                    .then(function(xml) { return resolveVAST(xml); })
+                    .then(function(data) {
                         if (data && data.mediaUrl) {
                             prerollData = data;
                             // Preload the ad video so it's ready when user clicks play
@@ -1172,8 +1231,8 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                             // User already interacted — no need to mute
                             fetch(PROXY + encodeURIComponent(vastUrl))
                                 .then(function(r) { return r.text(); })
-                                .then(function(xml) {
-                                    var data = parseVAST(xml);
+                                .then(function(xml) { return resolveVAST(xml); })
+                                .then(function(data) {
                                     if (data && data.mediaUrl) {
                                         adVideo.src = data.mediaUrl;
                                         adVideo.load();
