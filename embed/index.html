@@ -1272,10 +1272,13 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
         // ─── Analytics tracking (solo producción, no preview) ───
         (function() {
             var ANALYTICS_URL = 'https://panel.ujjina.com/api/analytics';
+            var TOKEN_URL = 'https://panel.ujjina.com/api/analytics-token';
             if (!uid || !pid) return;
             var sid = Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
             var dur = 0, bufCount = 0, bufMs = 0, errCount = 0, ttff = 0, quality = '', ref = '';
             var bufStart = 0, playStart = 0;
+            var analyticsToken = '';
+            var tokenExpiry = 0;
             try { ref = document.referrer || (window.parent !== window ? 'iframe' : 'direct'); } catch (e) { ref = 'iframe'; }
             var loadStart = Date.now();
             player.one('playing', function() { ttff = Date.now() - loadStart; });
@@ -1286,14 +1289,33 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 var ql = player.qualityLevels();
                 ql.on('change', function() { var active = ql[ql.selectedIndex]; if (active && active.height) quality = active.height + 'p'; });
             }
+
+            // Fetch signed token (refreshes every 50 min to stay within 1-hour validity)
+            function refreshToken() {
+                return fetch(TOKEN_URL + '?uid=' + encodeURIComponent(uid) + '&pid=' + encodeURIComponent(pid))
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.token) {
+                            analyticsToken = data.token;
+                            tokenExpiry = Date.now() + 50 * 60 * 1000;
+                        }
+                    })
+                    .catch(function() {});
+            }
+
             function send(type, extra) {
-                var data = { uid: uid, pid: pid, sid: sid, t: type, d: Math.round(dur), buf: bufCount, bufMs: Math.round(bufMs), err: errCount, ttff: Math.round(ttff), q: quality, ref: ref };
+                var data = { uid: uid, pid: pid, sid: sid, t: type, d: Math.round(dur), buf: bufCount, bufMs: Math.round(bufMs), err: errCount, ttff: Math.round(ttff), q: quality, ref: ref, token: analyticsToken };
                 if (extra) for (var k in extra) data[k] = extra[k];
                 try { navigator.sendBeacon(ANALYTICS_URL, JSON.stringify(data)); } catch (e) {
                     try { fetch(ANALYTICS_URL, { method: 'POST', body: JSON.stringify(data), keepalive: true, headers: { 'Content-Type': 'application/json' } }); } catch (e2) {}
                 }
             }
-            send('start');
+
+            // Get token first, then start tracking
+            refreshToken().then(function() {
+                send('start');
+            });
+
             player.on('play', function() { playStart = Date.now(); });
             player.on('pause', function() { if (playStart) { dur += (Date.now() - playStart) / 1000; playStart = 0; } });
             var lastSentDur = 0;
@@ -1302,8 +1324,9 @@ html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidde
                 var deltaDur = dur - lastSentDur;
                 if (deltaDur < 1 && bufCount === 0 && errCount === 0) return;
                 lastSentDur = dur;
-                send('heartbeat', { d: Math.round(deltaDur) });
-                bufCount = 0; bufMs = 0; errCount = 0;
+                // Refresh token if near expiry
+                var doSend = function() { send('heartbeat', { d: Math.round(deltaDur) }); bufCount = 0; bufMs = 0; errCount = 0; };
+                if (Date.now() > tokenExpiry) { refreshToken().then(doSend); } else { doSend(); }
             }, 300000);
             player.on('dispose', function() { clearInterval(heartbeatTimer); });
             window.addEventListener('beforeunload', function() {
